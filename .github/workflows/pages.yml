@@ -1,6 +1,8 @@
-# Publishes the Grok Bot wallpaper with its demo data to GitHub Pages on every push to main:
-# https://bodila51.github.io/grokbot-wallpaper/  (anyone can try it in the browser; installed wallpapers that point
-# here pick up every change by themselves). Only the wallpaper's own files go out: no journal, keys or source art.
+# Publishes the Grok Bot wallpaper site to GitHub Pages on every push to main:
+# https://bodila51.github.io/grokbot-wallpaper/        the landing page (landing/), with the live wallpaper in it
+# https://bodila51.github.io/grokbot-wallpaper/face/   the wallpaper itself with its demo data (installed wallpapers
+# point here and pick up every change by themselves). landing/assemble.mjs lists what goes out (no journal, keys or
+# source art); the same tree is deployed to https://0xcodila.com/grokbot-wallpaper/, the landing's main address.
 name: Pages
 on:
   push:
@@ -22,13 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Assemble the site
-        run: |
-          mkdir -p _site/face _site/assets/face _site/assets/blobs/thumbs _site/data
-          cp web/face/index.html web/face/face.css web/face/face.js _site/face/
-          cp assets/face/sphere.png assets/face/eye-*.png assets/face/eyes.json assets/face/grain.png _site/assets/face/
-          cp assets/blobs/thumbs/*.png _site/assets/blobs/thumbs/
-          cp web/data/demo-state.json web/data/demo-looks.json _site/data/
-          printf '<!doctype html><meta charset="utf-8"><title>Grok Bot Wallpaper</title><meta http-equiv="refresh" content="0; url=face/"><a href="face/">Grok Bot Wallpaper</a>\n' > _site/index.html
+        run: node landing/assemble.mjs _site
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
       - id: deployment

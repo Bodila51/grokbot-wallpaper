@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Grok Bot Wallpaper</title>
+<meta name="description" content="A live wallpaper that keeps an eye on your cursor and on your bots. Free for Windows with Lively Wallpaper; Mac app coming soon.">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:type" content="website">
+<link rel="canonical" href="https://0xcodila.com/grokbot-wallpaper/">
+<meta property="og:url" content="https://0xcodila.com/grokbot-wallpaper/">
+<meta property="og:title" content="Grok Bot Wallpaper">
+<meta property="og:description" content="A live wallpaper that keeps an eye on your cursor and on your bots.">
+<meta property="og:image" content="https://0xcodila.com/grokbot-wallpaper/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icon.png" type="image/png">
+<style>
+/* One rounded stage holds the live bot; everything around it is small and quiet. Colours are the wallpaper's own:
+   its studio white, the graphite of its cards and the light text on them. Type is the system's (SF on Apple,
+   Segoe on Windows), tightened as it grows. */
+:root {
+  --ground: #FFFFFF; --ink: #1D1D1F; --soft: #5C5C61;
+  --graphite: #232327; --graphite-2: #2E2E33; --on-graphite: #F5F5F7; --on-graphite-soft: #A1A1A6;
+  --edge: clamp(8px, 1vw, 14px); --radius: clamp(20px, 2.2vw, 32px); --pad: clamp(22px, 2.6vw, 40px);
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { margin: 0; background: var(--ground); color: var(--ink); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+h1, h2, h3, p, ol { margin: 0; }
+h1, h2, h3 { text-wrap: balance; }
+p { text-wrap: pretty; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 6px; }
+
+/* buttons: round like the bot, flat, they give on press */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 20px;
+  border: 0; border-radius: 999px; font: inherit; font-size: 15px; font-weight: 500; letter-spacing: -.005em;
+  cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+  transition: transform 160ms var(--ease-out), background-color 200ms ease;
+}
+.btn:active { transform: scale(.97); }
+.btn--ink { background: var(--ink); color: #FFFFFF; }
+.btn--soft { background: rgba(29, 29, 31, .07); color: var(--ink); }
+.btn--light { background: var(--on-graphite); color: var(--ink); }
+.btn--dim { background: var(--graphite-2); color: var(--on-graphite); }
+@media (hover: hover) and (pointer: fine) {
+  .btn--ink:hover { background: #3A3A3D; }
+  .btn--soft:hover { background: rgba(29, 29, 31, .12); }
+  .btn--light:hover { background: #FFFFFF; }
+  .btn--dim:hover { background: #3A3A40; }
+  .quiet a:hover { color: var(--ink); }
+}
+
+/* ---------- the stage: the wallpaper itself, live ---------- */
+/* the words sit on the stage in its corners, out of the bot's way; the cursor passes through them to the bot */
+.hero { position: relative; padding: var(--edge); --in: calc(var(--edge) + var(--pad)); }
+.stage {
+  position: relative; height: calc(100svh - 2 * var(--edge)); min-height: 560px; max-height: 1180px;
+  border-radius: var(--radius); overflow: hidden; background: #E6E6E9; isolation: isolate;
+}
+/* narrower than a small desktop, the frame renders a desktop-width page and is scaled down (--s, set by the script),
+   so a phone sees the same picture as a monitor: cards on the right, the bot rising at the bottom */
+.stage iframe {
+  position: absolute; top: 0; left: 0; width: calc(100% / var(--s, 1)); height: calc(100% / var(--s, 1)); border: 0; display: block;
+  transform: scale(var(--s, 1)); transform-origin: 0 0;
+}
+.stage__nav, .stage__title, .stage__actions { position: absolute; z-index: 1; }
+.stage__title { top: var(--in); left: 50%; translate: -50% 0; text-align: center; width: max-content; max-width: 30ch; pointer-events: none; }
+.hero h1 { font-size: 21px; font-weight: 600; letter-spacing: -.022em; line-height: 1.2; }
+.stage__title p { margin-top: 4px; color: var(--soft); font-size: 14px; line-height: 1.4; letter-spacing: -.005em; }
+.stage__nav { top: var(--in); left: var(--in); display: flex; gap: clamp(28px, 3.4vw, 56px); font-size: 13px; line-height: 1.7; }
+.stage__nav b { display: block; font-weight: 600; }
+.quiet a { display: block; width: fit-content; color: var(--soft); transition: color 150ms ease; }
+.stage__actions { left: 50%; bottom: calc(var(--edge) + clamp(22px, 4.2vh, 44px)); translate: -50% 0; display: flex; gap: 10px; }
+.stage__actions .btn--soft { background: #FFFFFF; }               /* on the bot's shaded white, a clean white pill */
+/* the wallpaper's look is still changing: over a dark sky the corner words turn light (the script reads its colour) */
+.on-dark .stage__nav, .on-dark .stage__title { color: #F5F5F7; }
+/* over a sky of any colour, grey text loses its contrast: every word on the stage is the full ink, weight sets the rank */
+.stage__title p, .stage__nav a { color: inherit; }
+@media (hover: hover) and (pointer: fine) { .stage__nav a:hover { color: inherit; text-decoration: underline; text-underline-offset: 3px; } }
+@media (hover: hover) and (pointer: fine) { .stage__actions .btn--soft:hover { background: #F2F2F4; } }
+@media (prefers-reduced-motion: no-preference) {
+  .stage__title, .stage__nav, .stage__actions { animation: arrive 700ms var(--ease-out) both; }
+  .stage__nav { animation-delay: 60ms; }
+  .stage__actions { animation-delay: 120ms; }
+  @keyframes arrive { from { opacity: 0; transform: translateY(8px); } }
+}
+
+/* ---------- what it does: four quiet columns ---------- */
+.does { padding: clamp(80px, 11vw, 160px) calc(var(--edge) + var(--pad)); }
+.does h2, .install h2 { font-size: clamp(28px, 2.6vw, 38px); font-weight: 600; letter-spacing: -.028em; line-height: 1.1; }
+.does__cols { margin-top: clamp(32px, 4vw, 56px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 32px clamp(24px, 3vw, 48px); }
+.does h3, .install h3 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; }
+.does p { margin-top: 6px; color: #424245; max-width: 32ch; }
+
+/* ---------- install: a graphite stage, the colour of the cards ---------- */
+.install { padding: 0 var(--edge); }
+.install .panel { border-radius: var(--radius); background: var(--graphite); color: var(--on-graphite); padding: clamp(36px, 5vw, 80px) var(--pad) var(--pad); }
+.install :focus-visible { outline-color: var(--on-graphite); }
+.install__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 24px; }
+.install__head p { color: var(--on-graphite-soft); }
+.steps { list-style: none; padding: 0; margin-top: clamp(36px, 4.5vw, 64px); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px clamp(24px, 3vw, 48px); counter-reset: step; max-width: 920px; }
+.steps li { counter-increment: step; }
+.steps h3::before { content: counter(step); display: inline-block; width: 1.4em; color: var(--on-graphite-soft); font-weight: 500; }
+.steps p { margin-top: 6px; padding-left: 1.4em; color: var(--on-graphite-soft); max-width: 40ch; }
+.steps b, .notes b { color: var(--on-graphite); font-weight: 500; }
+.steps .btn { margin: 18px 0 0 1.4em; }
+.link { margin-top: clamp(48px, 6vw, 88px); display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; }
+.link__url {
+  font-size: clamp(22px, 3.3vw, 48px); font-weight: 500; letter-spacing: -.03em; line-height: 1.1;
+  user-select: all; -webkit-user-select: all; overflow-wrap: anywhere; cursor: text;
+}
+.link__url span { color: var(--on-graphite-soft); }
+.link__url .nb { font-weight: inherit; white-space: nowrap; }
+.copy span { display: inline-block; }
+.notes { margin-top: clamp(56px, 7vw, 104px); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px clamp(24px, 3vw, 48px); font-size: 13px; line-height: 1.6; }
+.notes p { margin-top: 4px; color: var(--on-graphite-soft); max-width: 40ch; }
+.notes h3 { font-size: 13px; }
+.notes .btn { margin-top: 14px; font-size: 14px; padding: 0 18px; }
+
+footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; padding: 28px calc(var(--edge) + var(--pad)) 36px; font-size: 13px; color: var(--soft); }
+
+/* sections below the stage arrive once, part by part, as they come into view */
+@media (prefers-reduced-motion: no-preference) {
+  .js .rise { opacity: 0; transform: translateY(12px); transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out); transition-delay: calc(var(--i, 0) * 60ms); }
+  .js .rise.is-in { opacity: 1; transform: none; }
+}
+
+/* ---------- tablet and phone: the words step out above the stage, the bot and its cards keep the whole panel ---------- */
+@media (max-width: 1000px) {
+  .does__cols { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .notes { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 820px), (max-aspect-ratio: 4/5) {
+  .hero { display: flex; flex-direction: column; }
+  .stage__nav { display: none; }
+  .stage__title, .stage__actions { position: static; translate: none; width: auto; text-align: left; padding-inline: var(--pad); }
+  .stage__title { order: -2; padding-top: clamp(28px, 7vw, 48px); max-width: 30ch; }
+  .stage__actions { order: -1; flex-wrap: wrap; margin: 22px 0 clamp(24px, 6vw, 36px); }
+  .stage__actions .btn--soft { background: rgba(29, 29, 31, .07); }
+  .stage__title, .on-dark .stage__title { color: var(--ink); }
+  .stage__title p, .on-dark .stage__title p { color: var(--soft); }
+  .hero h1 { font-size: clamp(32px, 9vw, 44px); letter-spacing: -.035em; line-height: 1.04; }
+  .stage__title p { margin-top: 10px; font-size: 17px; line-height: 1.4; }
+  .stage { height: auto; min-height: 0; aspect-ratio: 4 / 5; max-height: 74svh; }
+}
+@media (max-width: 640px) {
+  .steps, .notes { grid-template-columns: 1fr; }
+  .does__cols { grid-template-columns: 1fr; gap: 24px; }
+  .link .btn { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="stage">
+    <!-- the real wallpaper, always its current version -->
+    <iframe id="live" src="face/" title="Grok Bot Wallpaper, running live"></iframe>
+  </div>
+  <nav class="stage__nav quiet" aria-label="On this page">
+    <div><b>Get it</b><a href="#windows">Windows</a><a href="#mac">Mac, coming soon</a></div>
+    <div><b>Look closer</b><a href="#does">What it does</a><a href="face/" target="_blank">Open in a new tab</a></div>
+  </nav>
+  <div class="stage__title">
+    <h1>Grok Bot Wallpaper</h1>
+    <p>A live wallpaper that keeps an eye on your cursor and on your bots.</p>
+  </div>
+  <div class="stage__actions">
+    <a class="btn btn--ink" href="#windows">Install on Windows</a>
+    <a class="btn btn--soft" href="face/" data-fullscreen>Try it full screen</a>
+  </div>
+</header>
+
+<main>
+  <section class="does" id="does" aria-labelledby="does-title">
+    <h2 id="does-title" class="rise">What it does</h2>
+    <div class="does__cols">
+      <div class="rise" style="--i:1">
+        <h3>Watches your cursor</h3>
+        <p>Grok Bot’s eyes follow the mouse across the whole screen. Leave it alone and it looks around, blinks, and gets sleepy when your bots are resting.</p>
+      </div>
+      <div class="rise" style="--i:2">
+        <h3>Shows how your bots are doing</h3>
+        <p>Live cards show which bots are working, which are waiting for you and which hit an error. When one needs you, Grok Bot glances at it.</p>
+      </div>
+      <div class="rise" style="--i:3">
+        <h3>Lets you move the cards</h3>
+        <p>Drag the cards anywhere on the desktop and they stay where you leave them. Double-click a card to send it back.</p>
+      </div>
+      <div class="rise" style="--i:4">
+        <h3>Updates itself</h3>
+        <p>The wallpaper loads from the web, so every new version reaches your desktop on its own.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="install" id="windows" aria-labelledby="windows-title">
+    <div class="panel">
+      <div class="install__head rise">
+        <h2 id="windows-title">Install on Windows</h2>
+        <p>Free, about a minute, Windows 10 or 11.</p>
+      </div>
+      <ol class="steps">
+        <li class="rise" style="--i:1">
+          <h3>Get Lively Wallpaper</h3>
+          <p>A free app that runs web pages as your wallpaper. Install it from the Microsoft Store.</p>
+          <a class="btn btn--light" href="https://apps.microsoft.com/store/detail/9NTM2QC6QWS7" target="_blank" rel="noopener">Open Microsoft Store</a>
+        </li>
+        <li class="rise" style="--i:2">
+          <h3>Add Grok Bot</h3>
+          <p>In Lively, click <b>Add Wallpaper</b>, paste the link below under <b>Enter URL</b> and press Enter.</p>
+        </li>
+      </ol>
+      <div class="link rise" style="--i:3">
+        <p class="link__url" id="wall-url"><span>https://</span>bodila51.github.io/<wbr><b class="nb">grokbot-wallpaper/face/</b></p>
+        <button class="btn btn--light copy" type="button" id="copy"><span aria-live="polite">Copy link</span></button>
+      </div>
+      <div class="notes">
+        <div class="rise">
+          <h3>Eyes not following the cursor?</h3>
+          <p>In Lively, open <b>Settings</b>, then <b>Wallpaper</b>, and set <b>Wallpaper input</b> to <b>Mouse</b>. Turn on <b>Mouse interaction when application focused</b> so it keeps watching over open windows.</p>
+        </div>
+        <div class="rise" style="--i:1">
+          <h3>A blue box when you drag a card?</h3>
+          <p>That is Windows selecting desktop icons. Right-click the desktop, open <b>View</b> and untick <b>Show desktop icons</b>.</p>
+        </div>
+        <div class="rise" style="--i:2" id="mac">
+          <h3>On a Mac</h3>
+          <p id="mac-note">The Mac app is coming soon. Until then, Grok Bot runs full screen right in your browser.</p>
+          <!-- When the Mac app ships: put the .dmg URL in href, remove `hidden`, and update the line above. -->
+          <a class="btn btn--light" id="mac-download" href="#" hidden>Download for Mac</a>
+          <a class="btn btn--dim" href="face/" data-fullscreen>Try it full screen</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="quiet">
+  <span>Grok Bot Wallpaper</span>
+  <a href="face/">Open the wallpaper on its own</a>
+</footer>
+
+<script>
+document.documentElement.classList.add('js');
+
+// The bot looks at the cursor anywhere on this page, not only over the stage: moves outside the frame are passed in
+// (same origin) in the frame's own coordinates, so the eyes turn down while you read below.
+const live = document.getElementById('live'), stage = live.parentElement;
+const DESK = 620;                                           // the narrowest page width the frame renders at
+let scale = 1, cursor = null, queued = false;
+function fit() {
+  scale = Math.min(1, stage.clientWidth / DESK);
+  stage.style.setProperty('--s', scale.toFixed(4));
+}
+fit();
+new ResizeObserver(fit).observe(stage);
+
+// Light or dark words over the stage: take the first colour of the wallpaper's own background (its top) and check
+// how bright it is. If anything about it can't be read, the words stay dark.
+function tone() {
+  try {
+    const d = live.contentDocument, cs = d && d.body && getComputedStyle(d.body);
+    if (!cs) return;
+    const css = cs.backgroundImage !== 'none' ? cs.backgroundImage : cs.backgroundColor;
+    const m = css.match(/rgba?\(([^)]+)\)/);
+    if (!m) return;
+    const [r, g, b] = m[1].split(',').map(parseFloat);
+    live.closest('.hero').classList.toggle('on-dark', (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 < 0.5);
+  } catch {}
+}
+live.addEventListener('load', tone);
+tone();
+function pass() {
+  queued = false;
+  const w = live.contentWindow;
+  if (!w || !cursor || !w.PointerEvent) return;
+  const r = live.getBoundingClientRect();
+  if (r.bottom < 0) return;                                 // scrolled out of sight
+  w.dispatchEvent(new w.PointerEvent('pointermove', { clientX: (cursor.x - r.left) / scale, clientY: (cursor.y - r.top) / scale, pointerType: 'mouse' }));
+}
+function queue() { if (!queued) { queued = true; requestAnimationFrame(pass); } }
+addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') { cursor = { x: e.clientX, y: e.clientY }; queue(); } }, { passive: true });
+addEventListener('scroll', () => { if (cursor) queue(); }, { passive: true });
+
+// "Try it full screen": the live frame itself goes full screen (Esc comes back); where it can't, open the page.
+document.querySelectorAll('[data-fullscreen]').forEach((a) => a.addEventListener('click', (e) => {
+  if (!document.fullscreenEnabled || !live.requestFullscreen) return;
+  e.preventDefault();
+  live.requestFullscreen().catch(() => { location.href = a.href; });
+}));
+
+// Copy link: the label blurs into "Copied" and back, so the change reads as one button changing its mind.
+const copy = document.getElementById('copy'), label = copy.firstElementChild;
+const LINK = 'https://bodila51.github.io/grokbot-wallpaper/face/';
+const calm = matchMedia('(prefers-reduced-motion: reduce)');
+function relabel(text) {
+  if (calm.matches || !label.animate) { label.textContent = text; return; }
+  label.animate([{ opacity: 1, filter: 'blur(0)' }, { opacity: 0, filter: 'blur(2px)' }], { duration: 110, easing: 'ease-out' })
+    .finished.then(() => {
+      label.textContent = text;
+      label.animate([{ opacity: 0, filter: 'blur(2px)' }, { opacity: 1, filter: 'blur(0)' }], { duration: 180, easing: 'ease-out' });
+    });
+}
+copy.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(LINK); }
+  catch { getSelection().selectAllChildren(document.getElementById('wall-url')); document.execCommand('copy'); }
+  relabel('Copied');
+  clearTimeout(copy.t); copy.t = setTimeout(() => relabel('Copy link'), 1800);
+});
+
+// Sections arrive once as they come into view; without script or with reduced motion they are simply there.
+const io = 'IntersectionObserver' in window && new IntersectionObserver((list) => list.forEach((e) => {
+  if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+}), { rootMargin: '0px 0px -8% 0px' });
+document.querySelectorAll('.rise').forEach((el) => (io ? io.observe(el) : el.classList.add('is-in')));
+</script>
+</body>
+</html>
