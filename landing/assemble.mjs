@@ -14,7 +14,7 @@ const parts = [
   ['landing/fonts', 'fonts', /\.woff2$/],
   ['landing/media', 'media', /\.(mp4|jpg)$/],
   ['web/face', 'face', /^(index\.html|face\.css|face\.js)$/],
-  ['assets/face', 'assets/face', /^(sphere\.png|eye-.+\.png|eyes\.json|grain\.png)$/],
+  ['assets/face', 'assets/face', /^(sphere(-black)?\.png|eye-.+\.png|eyes\.json|grain\.png)$/],
   ['assets/blobs/thumbs', 'assets/blobs/thumbs', /\.png$/],
   ['web/data', 'data', /^demo-(state|looks)\.json$/],
 ];
