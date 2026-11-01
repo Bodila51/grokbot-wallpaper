@@ -103,23 +103,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         let menu = NSMenu()
         menu.delegate = self
-        dragItem = menuItem("Двигать карточки", #selector(toggleDrag))
-        loginItem = menuItem("Запускать при входе", #selector(toggleLogin))
-        whiteBotItem = menuItem("Бот: белый", #selector(chooseBot(_:)))
+        dragItem = menuItem("Move cards", #selector(toggleDrag))
+        loginItem = menuItem("Launch at login", #selector(toggleLogin))
+        whiteBotItem = menuItem("Bot: White", #selector(chooseBot(_:)))
         whiteBotItem.representedObject = "white"
-        blackBotItem = menuItem("Бот: чёрный", #selector(chooseBot(_:)))
+        blackBotItem = menuItem("Bot: Black", #selector(chooseBot(_:)))
         blackBotItem.representedObject = "black"
         menu.addItem(dragItem)
         menu.addItem(.separator())
         menu.addItem(whiteBotItem)
         menu.addItem(blackBotItem)
         menu.addItem(.separator())
-        menu.addItem(menuItem("Обновить обои", #selector(reloadWallpapers)))
-        menu.addItem(menuItem("Адрес обоев…", #selector(editAddress)))
+        menu.addItem(menuItem("Reload wallpaper", #selector(reloadWallpapers)))
+        menu.addItem(menuItem("Wallpaper address…", #selector(editAddress)))
         menu.addItem(.separator())
         menu.addItem(loginItem)
         menu.addItem(.separator())
-        menu.addItem(menuItem("Выйти", #selector(quit), key: "q"))
+        menu.addItem(menuItem("Quit", #selector(quit), key: "q"))
         statusItem.menu = menu
         updateIcon()
     }
@@ -144,10 +144,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         image?.isTemplate = true
         button.image = image
         button.title = image == nil ? (dragMode ? "✋" : "👀") : ""
-        button.toolTip = dragMode ? "Двигать карточки: включено (Esc — выключить)" : "Grok Bot Wallpaper"
+        button.toolTip = dragMode ? "Move cards: on (Esc to turn off)" : "Grok Bot Wallpaper"
     }
 
-    // MARK: «Двигать карточки»: the page takes real clicks for a while, above the desktop icons
+    // MARK: «Move cards»: the page takes real clicks for a while, above the desktop icons
 
     @objc private func toggleDrag() { setDrag(!dragMode) }
 
@@ -190,24 +190,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc private func editAddress() {
         let alert = NSAlert()
-        alert.messageText = "Адрес обоев"
-        alert.informativeText = "Страница, которую показывают обои. Для своих ботов — адрес локального сервера, "
-            + "например http://localhost:8787/face/?key=…"
+        alert.messageText = "Wallpaper address"
+        alert.informativeText = "The page the wallpaper shows, e.g. https://bodila51.github.io/grokbot-wallpaper/face/#your-topic, "
+            + "or your own bot server: http://localhost:8787/face/?key=…"
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 440, height: 24))
         field.stringValue = Settings.url.absoluteString
         field.placeholderString = Settings.defaultURL.absoluteString
         alert.accessoryView = field
-        alert.addButton(withTitle: "Сохранить")
-        alert.addButton(withTitle: "Отмена")
-        alert.addButton(withTitle: "По умолчанию")
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Default")
         alert.window.initialFirstResponder = field
         NSApp.activate(ignoringOtherApps: true)
         switch alert.runModal() {
         case .alertFirstButtonReturn:
-            let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let url = URL(string: text), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
-                  url.host != nil else {
-                showAlert("Это не похоже на адрес страницы", "Нужен адрес вида https://… или http://localhost:8787/face/?key=…")
+            guard let url = Settings.address(from: field.stringValue) else {
+                showAlert("That doesn't look like a web address",
+                          "Use an address like https://bodila51.github.io/grokbot-wallpaper/face/#your-topic or http://localhost:8787/face/?key=…")
                 return
             }
             Settings.url = url
@@ -229,8 +228,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 if service.status == .requiresApproval { SMAppService.openSystemSettingsLoginItems() }
             }
         } catch {
-            showAlert("Не получилось изменить автозапуск",
-                      "\(error.localizedDescription)\n\nВключите вручную: Системные настройки → Основные → Объекты входа.")
+            showAlert("Couldn't change Launch at login",
+                      "\(error.localizedDescription)\n\nTurn it on in System Settings → General → Login Items.")
             SMAppService.openSystemSettingsLoginItems()
         }
     }
@@ -241,9 +240,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func checkInstallPlace() {
         let path = Bundle.main.bundlePath
         guard path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/") else { return }
-        showAlert("Перенесите приложение в «Программы»",
-                  "Сейчас оно запущено прямо из скачанного образа. Перетащите «Grok Bot Wallpaper» в папку «Программы» "
-                  + "и откройте оттуда, иначе не заработает «Запускать при входе».")
+        showAlert("Move the app to Applications",
+                  "It is running straight from the downloaded disk image. Drag Grok Bot Wallpaper to the Applications folder "
+                  + "and open it from there, otherwise Launch at login won't work.")
     }
 
     private func showAlert(_ title: String, _ text: String) {
@@ -257,11 +256,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // An app without a menu bar has no Edit menu, so ⌘V would not paste into the address field without this.
     private func installEditMenu() {
-        let edit = NSMenu(title: "Правка")
-        edit.addItem(withTitle: "Вырезать", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
-        edit.addItem(withTitle: "Скопировать", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
-        edit.addItem(withTitle: "Вставить", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
-        edit.addItem(withTitle: "Выбрать все", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
         let editItem = NSMenuItem()
         editItem.submenu = edit
         let main = NSMenu()
@@ -279,6 +278,20 @@ enum Settings {
     }
 
     static func resetURL() { UserDefaults.standard.removeObject(forKey: "wallpaperURL") }
+
+    /// Takes what people paste: …/face/#topic (the topic may be any text), with or without https://.
+    static func address(from input: String) -> URL? {
+        var text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !text.contains("://") { text = "https://" + text }
+        var parts = text.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        if parts.count == 2,
+           let topic = (parts[1].removingPercentEncoding ?? parts[1]).addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) {
+            parts[1] = topic
+        }
+        guard let url = URL(string: parts.joined(separator: "#")), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", url.host != nil else { return nil }
+        return url
+    }
 
     /// "white" or "black" once picked in the menu; nil leaves the page's own choice (?bot=…, its localStorage).
     static var bot: String? {

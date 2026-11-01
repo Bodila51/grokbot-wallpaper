@@ -18,7 +18,7 @@ final class WallpaperWebView: WKWebView {
 final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
     // Above the system wallpaper, below the Finder's icons (the icon level is the desktop level + 20).
     static let wallpaperLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
-    // «Двигать карточки»: above the icons, still below every app window.
+    // «Move cards»: above the icons, still below every app window.
     static let dragLevel = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
 
     let window: DesktopWindow
@@ -71,7 +71,7 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
         webView.load(URLRequest(url: url))
     }
 
-    /// «Обновить обои»: the same page fresh from the server, or the new address.
+    /// «Reload wallpaper»: the same page fresh from the server, or the new address.
     func refresh(_ newURL: URL) {
         if newURL == url, webView.url != nil {
             cancelRetry()

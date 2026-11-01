@@ -19,9 +19,22 @@ cp "$BIN" "$APP/Contents/MacOS/GrokBotWallpaper"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 plutil -replace CFBundleShortVersionString -string "$VERSION" "$APP/Contents/Info.plist"
 plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP/Contents/Info.plist"
-if [ -f Resources/AppIcon.icns ]; then
-  cp Resources/AppIcon.icns "$APP/Contents/Resources/"
+# App icon from the brand mark (Resources/AppIcon.png, a copy of assets/brand/logo-mark.png); a failure only
+# leaves the generic icon, it never fails the build.
+make_icon() {
+  local iconset="dist/AppIcon.iconset" size
+  mkdir -p "$iconset" || return 1
+  for size in 16 32 128 256 512; do
+    sips -z "$size" "$size" Resources/AppIcon.png --out "$iconset/icon_${size}x${size}.png" >/dev/null || return 1
+    sips -z "$((size * 2))" "$((size * 2))" Resources/AppIcon.png --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null || return 1
+  done
+  iconutil -c icns "$iconset" -o "$APP/Contents/Resources/AppIcon.icns" || return 1
+  rm -rf "$iconset"
+}
+if [ -f Resources/AppIcon.png ] && make_icon; then
   plutil -replace CFBundleIconFile -string AppIcon "$APP/Contents/Info.plist"
+else
+  echo "warning: app icon skipped, the app keeps the generic icon"
 fi
 
 # Ad-hoc signature: no Apple Developer account, so on first launch macOS asks to confirm the app once (see README).

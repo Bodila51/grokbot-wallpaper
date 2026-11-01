@@ -37,5 +37,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" mac/dist/GrokBotWallpaper.dmg \
-            --title "Grok Bot Wallpaper для Mac ${GITHUB_REF_NAME#mac-v}" \
-            --notes "Живые обои Grok Bot для macOS 13+. Установка и первый запуск: https://github.com/${{ github.repository }}/blob/main/mac/README.md"
+            --title "Grok Bot Wallpaper for Mac ${GITHUB_REF_NAME#mac-v}" \
+            --notes "Live Grok Bot wallpaper for macOS 13+. Install and first launch: https://github.com/${{ github.repository }}/blob/main/mac/README.md"

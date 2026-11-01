@@ -1,97 +1,96 @@
-# Grok Bot Wallpaper для Mac
+# Grok Bot Wallpaper for Mac
 
-Живые обои: большой белый Grok Bot снизу экрана следит глазами за курсором, рядом карточки с вашими ботами.
-На Windows это делает Lively, на Mac — это маленькое приложение. Нужна macOS 13 Ventura или новее,
-подходит и Apple silicon (M1–M4), и Intel.
+A live wallpaper: the big Grok Bot rises from the bottom of the screen, its eyes follow your cursor, and cards
+show your bots. On Windows this runs in Lively; on the Mac it is this small app. Needs macOS 13 Ventura or newer,
+on Apple silicon (M1–M4) or Intel.
 
-## Установка
+## Install
 
-1. Скачайте `GrokBotWallpaper.dmg`:
-   - со страницы релизов: <https://github.com/Bodila51/grokbot-wallpaper/releases/latest>;
-   - или свежую сборку: вкладка **Actions** → «Mac app» → последний зелёный запуск → **Artifacts** →
-     `GrokBotWallpaper-dmg` (скачается zip, внутри `.dmg`; нужен вход в GitHub).
-2. Откройте `.dmg` и перетащите **Grok Bot Wallpaper** в папку **Программы** (Applications).
-3. Первый запуск. Приложение не подписано платным аккаунтом Apple, поэтому macOS один раз попросит подтвердить:
-   - **macOS 13–14:** в «Программах» нажмите на приложение правой кнопкой → **Открыть** → в окне ещё раз **Открыть**.
-   - **macOS 15 и новее:** дважды щёлкните приложение → появится «Не удалось проверить…» → **Готово**.
-     Затем **Системные настройки → Конфиденциальность и безопасность**, внизу у строки про Grok Bot Wallpaper
-     нажмите **Всё равно открыть** → введите пароль → **Открыть**.
-   - Если не получается, то же самое делает одна команда в Терминале:
+1. Download `GrokBotWallpaper.dmg`:
+   - from the releases page: <https://github.com/Bodila51/grokbot-wallpaper/releases/latest>;
+   - or the newest build: **Actions** tab → "Mac app" → latest green run → **Artifacts** →
+     `GrokBotWallpaper-dmg` (a zip with the `.dmg` inside; needs a GitHub login).
+2. Open the `.dmg` and drag **Grok Bot Wallpaper** into **Applications**.
+3. First launch. The app is not signed with a paid Apple developer account, so macOS asks you to confirm it once:
+   - **macOS 13–14:** in Applications, right-click the app → **Open** → **Open** again in the dialog.
+   - **macOS 15 and newer:** double-click the app → "could not verify…" → **Done**. Then open
+     **System Settings → Privacy & Security**, scroll down to the line about Grok Bot Wallpaper, click
+     **Open Anyway**, enter your password → **Open**.
+   - If that does not work, one Terminal command does the same:
      ```bash
      xattr -dr com.apple.quarantine "/Applications/Grok Bot Wallpaper.app"
      ```
 
-Дальше приложение открывается как обычно. Иконки в Dock у него нет, только значок 👀 в строке меню наверху.
+After that it opens like any app. It has no Dock icon, only the 👀 icon in the menu bar.
 
-## Меню (значок 👀 в строке меню)
+## Menu (the 👀 icon in the menu bar)
 
-- **Двигать карточки** — на время делает обои кликабельными (поверх иконок рабочего стола), чтобы перетащить
-  карточки. Выключается тем же пунктом, клавишей **Esc** или щелчком по любому другому приложению.
-  Пока режим включён, значок — ✋.
-- **Бот: белый / чёрный** — цвет Grok Bot. Выбор запоминается и возвращается после каждой перезагрузки
-  страницы. Пока ничего не выбрано, страница решает сама (белый, или `?bot=black` в адресе обоев).
-- **Обновить обои** — перезагрузить страницу (например, после изменений дизайна).
-- **Адрес обоев…** — какую страницу показывать. По умолчанию демо:
-  `https://bodila51.github.io/grokbot-wallpaper/face/`. Для своих ботов — адрес локального сервера,
-  например `http://localhost:8787/face/?key=…` (сервер запускается по [README-server.md](../README-server.md)).
-  **По умолчанию** возвращает демо.
-- **Запускать при входе** — включает автозапуск. Если macOS попросит подтвердить, откроется
-  «Системные настройки → Основные → Объекты входа».
-- **Выйти**.
+- **Move cards** makes the wallpaper clickable for a while (above the desktop icons) so you can drag the cards.
+  Turn it off with the same item, the **Esc** key, or by clicking any other app. The icon shows ✋ meanwhile.
+- **Bot: White / Black** picks the bot's colour. The choice is remembered and re-applied after every reload.
+  Until you pick one, the page decides (white, or `?bot=black` in the wallpaper address).
+- **Reload wallpaper** reloads the page, e.g. after a design update.
+- **Wallpaper address…** sets the page to show. Default: `https://bodila51.github.io/grokbot-wallpaper/face/`.
+  A topic link like `https://bodila51.github.io/grokbot-wallpaper/face/#your-topic` works (`https://` may be left
+  out), and so does your own bot server: `http://localhost:8787/face/?key=…`
+  (see [README-server.md](../README-server.md)). **Default** goes back to the demo.
+- **Launch at login** starts the wallpaper when you log in. If macOS wants approval,
+  System Settings → General → Login Items opens.
+- **Quit**.
 
-## Разрешения
+## Permissions
 
-Никаких. Приложению не нужны ни «Универсальный доступ», ни «Мониторинг ввода», ни «Запись экрана»:
+None. The app needs no Accessibility, Input Monitoring or Screen Recording access:
 
-- положение курсора читается через `NSEvent.mouseLocation` — это обычное чтение позиции, оно не требует
-  разрешений (разрешения в macOS защищают нажатия клавиш и перехват событий, а не позицию курсора);
-- окно обоев пропускает все клики насквозь, поэтому иконки и рабочий стол работают как обычно;
-- курсор передаётся странице 60 раз в секунду и только если он сдвинулся — как событие `pointermove`,
-  то же, что прислал бы браузер.
+- the cursor position is read with `NSEvent.mouseLocation`, a plain position read that needs no permission
+  (macOS permissions guard keystrokes and event taps, not where the cursor is);
+- the wallpaper window lets every click through, so the desktop icons work as usual;
+- the cursor reaches the page up to 60 times a second, only when it moved, as the same `pointermove` event
+  a browser would send.
 
-Если macOS всё же что-то спросит, напишите, что именно: значит, в новой версии системы поменялись правила.
-Единственный возможный запрос — «Локальная сеть», и только если адрес обоев указывает на другой компьютер
-в сети (для `localhost` его не будет).
+If macOS asks for something anyway, please report what exactly: the rules changed in a new macOS version.
+The only expected prompt is "Local Network", and only when the wallpaper address points to another computer
+on your network (never for `localhost`).
 
-## Батарея
+## Battery
 
-Пока экран спит, выбран другой пользователь или все обои закрыты окнами / полноэкранным приложением,
-курсор странице не передаётся. Саму страницу в закрытом окне macOS тоже притормаживает.
+While the screens sleep, another user is active, or every wallpaper is covered by windows or a full-screen app,
+the cursor is not sent to the page. macOS also slows the hidden page down by itself.
 
-Если глаза вдруг перестанут следить, хотя обои видно (macOS ошибочно считает окно закрытым), отключите эту паузу:
+If the eyes stop following although the wallpaper is visible (macOS wrongly reports the window as covered),
+turn this pause off and restart the app:
 
 ```bash
 defaults write io.github.bodila51.grokbot-wallpaper pauseWhenCovered -bool false
 ```
 
-и перезапустите приложение.
+## Uninstall
 
-## Удаление
-
-Выключите «Запускать при входе», нажмите «Выйти», удалите приложение из «Программ». Настройки:
+Turn off Launch at login, choose Quit, delete the app from Applications. Settings:
 
 ```bash
 defaults delete io.github.bodila51.grokbot-wallpaper
 ```
 
-## Для разработки
+## Development
 
-- Исходники: `Sources/GrokBotWallpaper/` (Swift, AppKit + WKWebView), без Xcode-проекта, только `Package.swift`.
-- Собрать на Mac: `bash mac/build.sh` → `mac/dist/GrokBotWallpaper.dmg`.
-- GitHub собирает `.dmg` сам (`.github/workflows/mac.yml`) при каждом пуше в `mac/`.
-- Выпустить релиз: `git tag mac-v1.0 && git push origin mac-v1.0` — релиз с `.dmg` появится сам.
-- Отладить страницу внутри обоев: Safari → Разработка → имя Мака → Grok Bot Wallpaper.
+- Sources: `Sources/GrokBotWallpaper/` (Swift, AppKit + WKWebView), no Xcode project, just `Package.swift`.
+- App icon: `Resources/AppIcon.png` (a copy of `assets/brand/logo-mark.png`), turned into `.icns` by the build.
+- Build on a Mac: `bash mac/build.sh` → `mac/dist/GrokBotWallpaper.dmg` (the universal build needs full Xcode).
+- GitHub builds the `.dmg` itself (`.github/workflows/mac.yml`) on every push that touches `mac/`.
+- Release: `git tag mac-v1.0 && git push origin mac-v1.0` publishes a release with the `.dmg`.
+- Debug the page inside the wallpaper: Safari → Develop → your Mac → Grok Bot Wallpaper.
 
-## Проверка на настоящем Mac
+## Test on a real Mac
 
-- [ ] Глаза следят за курсором везде: над рабочим столом, над окнами других программ, в строке меню.
-- [ ] Иконки рабочего стола кликаются, выделяются рамкой, перетаскиваются; правый клик по столу работает.
-- [ ] «Двигать карточки»: карточки перетаскиваются; Esc / пункт меню / щелчок по другому окну выключают режим.
-- [ ] Два монитора: обои на обоих, глаза на втором смотрят в сторону курсора на первом; отключение и
-      подключение монитора не ломает обои.
-- [ ] Spaces (несколько рабочих столов): обои на каждом, при переключении не пропадают; в Mission Control
-      окно обоев не появляется.
-- [ ] «Бот: белый / чёрный»: цвет меняется сразу на всех мониторах и сохраняется после «Обновить обои»
-      и перезапуска приложения.
-- [ ] «Запускать при входе»: после выхода из системы и входа обои появляются сами.
-- [ ] Полноэкранное приложение поверх и сон экрана: после возврата глаза снова следят.
+- [ ] The eyes follow the cursor everywhere: over the desktop, over other apps' windows, in the menu bar.
+- [ ] Desktop icons can be clicked, selected with a marquee and dragged; right-click on the desktop works.
+- [ ] Move cards: the cards drag; Esc / the menu item / clicking another window turns the mode off.
+- [ ] Two displays: wallpaper on both, the eyes on one look towards the cursor on the other; unplugging and
+      plugging a display back does not break it.
+- [ ] Spaces: the wallpaper is on every desktop and stays when switching; it never shows in Mission Control.
+- [ ] Bot: White / Black changes the colour on all displays at once and survives Reload wallpaper and a restart.
+- [ ] Wallpaper address accepts `…/face/#your-topic` and shows that topic.
+- [ ] Launch at login: after logging out and in, the wallpaper comes back by itself.
+- [ ] A full-screen app on top, then screen sleep: afterwards the eyes follow again.
+- [ ] The app icon (white ball with black eyes) shows in Finder and in the `.dmg`.

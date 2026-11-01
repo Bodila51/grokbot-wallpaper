@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>ru</string>
+	<string>en</string>
 	<key>CFBundleName</key>
 	<string>Grok Bot Wallpaper</string>
 	<key>CFBundleDisplayName</key>
@@ -40,6 +40,6 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Чтобы показывать обои с сервера ваших ботов в локальной сети.</string>
+	<string>To show the wallpaper from your bot server on the local network.</string>
 </dict>
 </plist>
