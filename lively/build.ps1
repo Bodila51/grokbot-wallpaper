@@ -1,10 +1,8 @@
 ﻿# Build lively\dist\grokbot-wallpaper.zip: a Lively web wallpaper whose index.html only redirects to the LIVE page
 # <server>/face/ on the local Bot HQ server (nothing is copied, edits in web\ and assets\ show after a reload).
-# Not a "webpage link" wallpaper: Lively gives LivelyProperties.json (bot color) only to local web wallpapers,
+# Not a "webpage link" wallpaper: Lively gives LivelyProperties.json (bot color, feed) only to local web wallpapers,
 # and it keeps sending them to the page after the redirect.
 # The view key from data\view-key.txt goes into index.html, so the zip is git-ignored: never share it.
-#   -NoShot   skip the fresh screenshot and use the committed lively\preview.jpg as the tile picture
-param([switch]$NoShot)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
@@ -30,37 +28,8 @@ $redirect = "<!doctype html><meta charset=`"utf-8`"><title>Grok Bot</title><styl
 Copy-Item (Join-Path $PSScriptRoot 'LivelyInfo.json') $pkg
 # Settings Lively shows under "Customise" and sends to the page as livelyPropertyListener(name, value).
 Copy-Item (Join-Path $PSScriptRoot 'LivelyProperties.json') $pkg
-
-# Tile picture: a fresh 640x360 shot of the live page (headless Edge), else the committed one.
-function Save-Shot([string]$from, [string]$jpg) {
-  $edge = "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe" |
-    Where-Object { Test-Path $_ } | Select-Object -First 1
-  if (-not $edge) { return $false }
-  $tmp = Join-Path $env:TEMP ('gbw-shot-' + [guid]::NewGuid().ToString('N'))
-  New-Item -ItemType Directory $tmp | Out-Null
-  $png = Join-Path $tmp 'shot.png'
-  try {
-    $p = Start-Process $edge -WindowStyle Hidden -PassThru -ArgumentList @(
-      '--headless=new', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--mute-audio', "--user-data-dir=`"$tmp\profile`"",
-      '--window-size=1280,720', '--virtual-time-budget=6000', "--screenshot=`"$png`"", "`"$from`"")
-    $null = $p.WaitForExit(30000)
-    if (-not (Test-Path $png)) { return $false }
-    Add-Type -AssemblyName System.Drawing
-    $src = [Drawing.Image]::FromFile($png)
-    $bmp = New-Object Drawing.Bitmap 640, 360
-    $g = [Drawing.Graphics]::FromImage($bmp)
-    $g.InterpolationMode = [Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-    $g.DrawImage($src, 0, 0, 640, 360)
-    $jpeg = [Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object MimeType -eq 'image/jpeg'
-    $q = New-Object Drawing.Imaging.EncoderParameters 1
-    $q.Param[0] = New-Object Drawing.Imaging.EncoderParameter ([Drawing.Imaging.Encoder]::Quality), 85L
-    $bmp.Save($jpg, $jpeg, $q)
-    $g.Dispose(); $bmp.Dispose(); $src.Dispose()
-    return $true
-  } catch { return $false } finally { Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue }
-}
-$shot = Join-Path $pkg 'preview.jpg'
-if ($NoShot -or -not (Save-Shot $url $shot)) { Copy-Item (Join-Path $PSScriptRoot 'preview.jpg') $shot }
+# Library tile and preview: the Grok Bot logo mark.
+Copy-Item (Join-Path $Root 'assets\brand\logo-mark.png') (Join-Path $pkg 'thumbnail.png')
 
 $tmpZip = "$pkg.zip"
 Compress-Archive -Path (Join-Path $pkg '*') -DestinationPath $tmpZip -Force
@@ -70,5 +39,5 @@ for ($i = 1; ; $i++) {
   try { Move-Item $tmpZip $zip -Force -ErrorAction Stop; break }
   catch { if ($i -ge 10) { throw }; Start-Sleep -Seconds 1 }
 }
-Write-Host "Готово: $zip"
-Write-Host 'В архиве ключ просмотра: не выкладывай и не пересылай его.'
+Write-Host "Done: $zip"
+Write-Host 'The zip holds your view key: do not post or share it.'

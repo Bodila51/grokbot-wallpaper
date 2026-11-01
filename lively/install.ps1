@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-  Write-Host 'Нужен Node.js 24 или новее (https://nodejs.org). Поставь его и запусти install.cmd ещё раз.' -ForegroundColor Yellow
+  Write-Host 'Node.js 24 or newer is required (https://nodejs.org). Install it and run install.cmd again.' -ForegroundColor Yellow
   exit 1
 }
 
@@ -19,11 +19,11 @@ $lnk.WorkingDirectory = $Root
 $lnk.WindowStyle = 7   # minimized: no window flashes at login
 $lnk.Description = 'Bot HQ server for the Grok Bot wallpaper (Lively)'
 $lnk.Save()
-Write-Host "Автозапуск сервера при входе в Windows: $ShortcutPath"
+Write-Host "The server starts at Windows sign-in: $ShortcutPath"
 
 & (Join-Path $PSScriptRoot 'server.ps1') -Wait
-if ($LASTEXITCODE) { Write-Host "Сервер не запустился, смотри $Data\autostart.err.log" -ForegroundColor Red; exit 1 }
-Write-Host "Сервер работает: $Base"
+if ($LASTEXITCODE) { Write-Host "The server did not start, see $Data\autostart.log" -ForegroundColor Red; exit 1 }
+Write-Host "Server is running: $Base"
 
 & (Join-Path $PSScriptRoot 'build.ps1')
 $zip = Join-Path $PSScriptRoot 'dist\grokbot-wallpaper.zip'
@@ -34,8 +34,8 @@ if ($lively) {
   Expand-Archive -Path $zip -DestinationPath $dest -Force
   if (-not (Get-Process Lively -ErrorAction SilentlyContinue)) { Start-Process $lively; Start-Sleep -Seconds 8 }
   Start-Process $lively -ArgumentList 'setwp', '--file', "`"$dest`"" -Wait
-  Write-Host 'Готово: обои Grok Bot стоят в Lively (главный экран).' -ForegroundColor Green
+  Write-Host 'Done: the Grok Bot wallpaper is on in Lively (main screen).' -ForegroundColor Green
 } else {
   Start-Process explorer.exe "/select,`"$zip`""
-  Write-Host 'Осталось: перетащи grokbot-wallpaper.zip в окно Lively (или «Добавить обои» → выбрать этот файл).' -ForegroundColor Green
+  Write-Host 'Last step: drag grokbot-wallpaper.zip into the Lively window (or Add Wallpaper -> choose this file).' -ForegroundColor Green
 }

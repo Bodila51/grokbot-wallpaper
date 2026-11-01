@@ -3,7 +3,7 @@
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-if (Test-Path $ShortcutPath) { Remove-Item $ShortcutPath; Write-Host 'Автозапуск сервера убран.' }
+if (Test-Path $ShortcutPath) { Remove-Item $ShortcutPath; Write-Host 'Server autostart removed.' }
 
 # Only the server server.ps1 started (its pid and its flags), never someone's dev server on the same port.
 $pidFile = Join-Path $Data 'autostart.pid'
@@ -12,7 +12,7 @@ if (Test-Path $pidFile) {
   $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$id" -ErrorAction SilentlyContinue
   if ($proc -and $proc.CommandLine -like '*server.js*--no-cache*') {
     & taskkill.exe /PID $id /T /F | Out-Null   # the cmd.exe and the node server under it
-    Write-Host 'Сервер обоев остановлен.'
+    Write-Host 'Wallpaper server stopped.'
   }
   Remove-Item $pidFile
 }
@@ -26,12 +26,12 @@ if (Test-Path $dest) {
     Start-Process $lively -ArgumentList 'closewp', '--monitor', '-1' -Wait
   }
   Remove-Item -Recurse -Force $dest
-  Write-Host 'Обои Grok Bot убраны из библиотеки Lively.'
+  Write-Host 'Grok Bot wallpaper removed from the Lively library.'
 }
 
 $dist = Join-Path $PSScriptRoot 'dist'
 if (Test-Path $dist) {
   Remove-Item -Recurse -Force $dist -ErrorAction SilentlyContinue
-  if (Test-Path $dist) { Write-Host "Не вышло удалить $dist (файл занят): удали папку вручную, в zip ключ." -ForegroundColor Yellow }
+  if (Test-Path $dist) { Write-Host "Could not delete $dist (a file is in use): delete it by hand, the zip holds your view key." -ForegroundColor Yellow }
 }
-Write-Host 'Если ставил обои из zip вручную: в Lively правый клик по обоям Grok Bot → «Удалить».' -ForegroundColor Green
+Write-Host 'If you added the zip by hand: in Lively, right-click Grok Bot -> Delete.' -ForegroundColor Green

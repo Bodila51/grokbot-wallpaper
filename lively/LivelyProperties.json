@@ -2,7 +2,7 @@
   "botColor": {
     "type": "dropdown",
     "value": 0,
-    "text": "Цвет бота",
+    "text": "Bot color",
     "items": ["White", "Black"]
   },
   "feed": {
