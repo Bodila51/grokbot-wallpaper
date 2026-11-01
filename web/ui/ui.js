@@ -15,6 +15,12 @@
  * value changed), so hover, focus and scroll positions survive the 1 Hz re-render.
  * All data goes into the DOM through textContent / setAttribute, never innerHTML.
  * The UI text is English. The cards are graphite at every hour; no day/night switch here (see ui.css).
+ *
+ * Phones (<= 600 px wide, and landscape phones): <html> gets .bhq-phone (+ .bhq-land). The floors become a chip row,
+ * and the floor team, "Waiting on me", Finished, Routines and the activity feed move into one bottom sheet (a grabber, a
+ * peek with the floor name and counts, a spring snap between peek and ~60% of the height); the bot card becomes a sheet
+ * of its own (swipe down or x to close). Landscape: the sheet is a side column. Desktop is untouched: the same nodes move
+ * back when the window grows. ?sheet=open starts with the sheet expanded (for screenshots).
  */
 
 // Resolved against this file, so it works from /web/index.html, from a server rooted at web/, and from the harness.
@@ -96,6 +102,7 @@ function freshState(handlers) {
     failedThumbs: new Set(),
     mode: null, cardBot: null, teamFloor: null, teamReady: false, ready: false,
     keyHandler: null, ro: null, ro2: null, onResize: null, timer: null, fades: [],
+    sh: null, phone: false, land: false, mqs: null, mqFn: null, ro3: null, cardY: 0, cardStop: null, chipFloor: null,
   };
 }
 
@@ -359,9 +366,33 @@ function setAvatar(av, bot, status) {
       av.inner.classList.add('is-fb');
     } else {
       av.inner.classList.remove('is-fb');
-      av.img.src = THUMB_BASE + encodeURIComponent(name) + '.png';
+      // a hand-made thumb when the bot has one, else the pre-rendered 3D library (its shape, the nearest colour)
+      av.img.src = bot.has_glb === false ? libThumb(bot) : THUMB_BASE + encodeURIComponent(name) + '.png';
     }
   }
+}
+
+// assets/blobs/lib (build_blobs.py --lib): every shape in 12 colours, so anyone's bot gets a 3D avatar
+const LIB_BASE = new URL('../../assets/blobs/lib/', import.meta.url).href;
+const LIB_SHAPES = ['sphere', 'rounded_cube', 'pill', 'triangle', 'cone', 'pentagon', 'hexagon', 'star4', 'star6', 'clover', 'rounded_square', 'trio'];
+const LIB_COLORS = ['FB2B3E', 'FD690F', 'F6A317', 'A8D52F', '1FAE63', '13B7A2', '1E86FC', '7B5CF2', 'F93498', 'A06B39', '0C0C0E', 'F3E7DB'];
+function libThumb(bot) {
+  let h = 2166136261;
+  for (const ch of String(bot.id || bot.name || '')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const look = bot.look || {};
+  const shape = LIB_SHAPES.includes(look.shape) ? look.shape : LIB_SHAPES[h % LIB_SHAPES.length];
+  const m = /^#([0-9a-f]{6})$/i.exec(look.color || bot.color || '');
+  let hex = LIB_COLORS[(h >>> 4) % LIB_COLORS.length];
+  if (m) {                                               // nearest by weighted RGB; greys go to near-black or near-white
+    const rgb = (x) => [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16)), [r, g, b] = rgb(m[1]);
+    let best = Infinity;
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 28) { hex = LIB_COLORS[(r + g + b) / 3 < 128 ? 10 : 11]; best = 0; }
+    for (const p of LIB_COLORS) {
+      const [pr, pg, pb] = rgb(p), rm = (r + pr) / 2, d = (2 + rm / 256) * (r - pr) ** 2 + 4 * (g - pg) ** 2 + (3 - rm / 256) * (b - pb) ** 2;
+      if (d < best) { best = d; hex = p; }
+    }
+  }
+  return `${LIB_BASE}${shape}-${hex}.png`;
 }
 
 /* ------------------------------------------------------------------ init */
@@ -374,6 +405,9 @@ export function initUI(handlers) {
     if (U.onResize) removeEventListener('resize', U.onResize);
     if (U.ro) U.ro.disconnect();
     if (U.ro2) U.ro2.disconnect();
+    if (U.ro3) U.ro3.disconnect();
+    if (U.mqs && U.mqFn) for (const m of U.mqs) m.removeEventListener('change', U.mqFn);
+    if (U.phone) { document.documentElement.classList.remove('bhq-phone', 'bhq-land'); }
     if (U.timer) clearInterval(U.timer);
     for (const el of U.owned) if (el.parentNode) el.remove();
   }
@@ -397,6 +431,8 @@ export function initUI(handlers) {
   buildFeed(feed);
   buildZoom();
   buildDock(floors, feed);
+  buildSheet(feed);
+  watchPhone();
 
   U.keyHandler = (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -421,7 +457,7 @@ function buildTopbar(root) {
   const clock = h('span', { class: 'bhq-num bhq-clock', text: '--:--' });
   const brand = h('div', { class: 'bhq-brand bhq-surface' },
     h('img', { class: 'bhq-mark', src: MARK_SRC, alt: '', draggable: 'false' }),
-    h('b', { class: 'bhq-word', text: 'Grok Bot Wallpaper' }),
+    h('b', { class: 'bhq-word', text: 'Grok Bot Dashboard' }),
     h('span', { class: 'bhq-sep', 'aria-hidden': 'true' }),
     h('span', { class: 'bhq-live' }, h('i', { class: 'bhq-dot bhq-live-dot', 'aria-hidden': 'true' }), 'Live · ', clock));
 
@@ -459,10 +495,9 @@ function buildFloors(root) {
   const car = h('div', { class: 'bhq-car', 'aria-hidden': 'true' });
   const shaft = h('div', { class: 'bhq-shaft' }, car);
   const count = h('b', { class: 'bhq-num' });
-  root.append(
-    h('div', { class: 'bhq-fhead' }, h('span', { text: 'Floors' }), count),
-    h('div', { class: 'bhq-fscroll' }, shaft));
-  U.fl = { root, shaft, car, count, carTop: null, carH: null, carShown: false, ready: false };
+  const fscroll = h('div', { class: 'bhq-fscroll' }, shaft);
+  root.append(h('div', { class: 'bhq-fhead' }, h('span', { text: 'Floors' }), count), fscroll);
+  U.fl = { root, shaft, car, count, fscroll, carTop: null, carH: null, carShown: false, ready: false };
   if (typeof ResizeObserver === 'function') {
     U.ro = new ResizeObserver(() => placeCar());
     U.ro.observe(shaft);
@@ -502,8 +537,8 @@ function buildPanel(root) {
       h('div', { class: 'bhq-tcounts' }, rowWait, rowErr)));
   const list = watchFade(h('div', { class: 'bhq-members', role: 'list' }));
   const teamEmpty = h('p', { class: 'bhq-note', text: 'Nobody here yet. A bot shows up when it logs its first step.', hidden: true });
-  const team = h('section', { class: 'bhq-team', 'aria-label': 'Floor team' },
-    head, h('div', { class: 'bhq-tcard bhq-surface bhq-glow' }, list, teamEmpty));
+  const tcard = h('div', { class: 'bhq-tcard bhq-surface bhq-glow' }, list, teamEmpty);
+  const team = h('section', { class: 'bhq-team', 'aria-label': 'Floor team' }, head, tcard);
 
   /* bot card: a hero tinted by the bot's status over a graphite details card */
   const close = h('button', { class: 'bhq-close', type: 'button', 'aria-label': 'Close bot card', title: 'Close (Esc)' }, svg(ICON.close));
@@ -551,12 +586,13 @@ function buildPanel(root) {
   });
 
   const more = h('div', { class: 'bhq-more bhq-surface bhq-glow bhq-glow--still' }, body, h('div', { class: 'bhq-card-foot' }, cta));
-  const card = h('section', { class: 'bhq-card', hidden: true, 'aria-label': 'Bot card' }, hero, more);
+  const cgrab = h('span', { class: 'bhq-cgrab', 'aria-hidden': 'true' });
+  const card = h('section', { class: 'bhq-card', hidden: true, 'aria-label': 'Bot card' }, cgrab, hero, more);
 
   root.append(card, team);
 
   U.panel = {
-    root, team, teamHead: head, teamTitle, teamSub, teamBig: big, nWait, nErr, rowWait, rowErr, lErr, list, teamEmpty,
+    root, team, tcard, teamHead: head, teamTitle, teamSub, teamBig: big, nWait, nErr, rowWait, rowErr, lErr, list, teamEmpty,
     card: {
       root: card, hero, body, av, name, where, status, stDot, stTxt, now, taskBlock, task,
       sSteps, sTasks, sHours, usageLabel, useBlock, fuel, fillBar, shareNum, hist, histSig: null, cta, fresh: true,
@@ -719,6 +755,7 @@ function shown(el) { return !!el && el.getClientRects().length > 0; }
 function layoutDock() {
   const d = U && U.dock;
   if (!d) return;
+  if (U.phone) { fitDock(Infinity); updateFades(); return; } // in the sheet the cards simply stack and the sheet scrolls
   const gutter = 24;
   // offsetTop/offsetHeight ignore the cards' entrance transform
   const top = shown(d.floors) ? d.floors.offsetTop + d.floors.offsetHeight + 10 : 96;
@@ -729,6 +766,276 @@ function layoutDock() {
   fitDock(avail);
   updateFades();
 }
+
+/* ------------------------------------------------------------------ phones: the floor sheet and the bot sheet */
+
+// the same query as ui.css would use; JS owns it so the DOM and the CSS never disagree
+const MQ_PHONE = '(max-width: 600px), (max-height: 500px) and (max-width: 950px)';
+const MQ_LAND = '(max-height: 500px) and (orientation: landscape)';
+const DRAG_HYST = 6;
+
+// progressive resistance past an edge (Apple's rubber-band)
+function rubber(over, dim) { return (over * dim * 0.55) / (dim + 0.55 * Math.abs(over)); }
+// px/s over the last ~100 ms of a pointer history
+function velocity(hist) {
+  const a = hist[hist.length - 1];
+  let b = hist[0];
+  for (const p of hist) if (a.t - p.t <= 100) { b = p; break; }
+  const dt = a.t - b.t;
+  return dt > 0 ? ((a.y - b.y) / dt) * 1000 : 0;
+}
+// where a flick would come to rest (the deceleration projection of WWDC "Designing Fluid Interfaces")
+function project(v) { return (v / 1000) * 0.998 / (1 - 0.998); }
+
+// A spring from x to `to` that starts at the finger's velocity; critically damped unless it carries a flick. Returns cancel().
+function springTo(from, to, v0, set, done, resp, zeta) {
+  const k = Math.pow((2 * Math.PI) / (resp || 0.36), 2), c = 2 * (zeta || 1) * Math.sqrt(k);
+  let x = from, v = v0 || 0, last = performance.now(), raf = 0, dead = false;
+  const tick = (now) => {
+    if (dead) return;
+    const dt = Math.min(0.032, Math.max(0.001, (now - last) / 1000));
+    last = now;
+    v += (-k * (x - to) - c * v) * dt;
+    x += v * dt;
+    if (Math.abs(x - to) < 0.35 && Math.abs(v) < 12) { raf = 0; set(to); if (done) done(); return; }
+    set(x);
+    raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  return () => { dead = true; if (raf) cancelAnimationFrame(raf); };
+}
+
+// A vertical drag that follows the finger 1:1 (pointer capture, a small hysteresis, a short velocity history).
+function onDragY(el, hooks) {
+  let d = null;
+  el.addEventListener('pointerdown', (e) => {
+    if (!hooks.can(e) || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    d = { id: e.pointerId, y0: e.clientY, s: hooks.begin(), hist: [{ t: e.timeStamp, y: e.clientY }], moved: false };
+    try { el.setPointerCapture(e.pointerId); } catch { /* not capturable: the drag still works inside the element */ }
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!d || e.pointerId !== d.id) return;
+    const dy = e.clientY - d.y0;
+    if (!d.moved && Math.abs(dy) < DRAG_HYST) return;
+    d.moved = true;
+    d.hist.push({ t: e.timeStamp, y: e.clientY });
+    if (d.hist.length > 8) d.hist.shift();
+    hooks.move(d.s + dy);
+  });
+  const end = (e) => {
+    if (!d || e.pointerId !== d.id) return;
+    const g = d;
+    d = null;
+    hooks.end(g.moved, g.moved ? velocity(g.hist) : 0);
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+let rootVars = {};
+function rootVar(name, v) {
+  if (rootVars[name] === v) return;
+  rootVars[name] = v;
+  document.documentElement.style.setProperty(name, v);
+}
+
+function buildSheet(feed) {
+  const grab = h('button', { class: 'bhq-sgrab', type: 'button', 'aria-expanded': 'false', 'aria-label': 'Expand panel' }, h('i', { 'aria-hidden': 'true' }));
+  const headSlot = h('div', { class: 'bhq-shead' });
+  const peek = h('div', { class: 'bhq-speek' }, grab, headSlot);
+  const body = h('div', { class: 'bhq-sbody' });
+  const probe = h('i', { class: 'bhq-sprobe', 'aria-hidden': 'true' }); // its height is the bottom safe area
+  const root = own(h('div', { class: 'bhq-sheet', role: 'region', 'aria-label': 'Floor panel' }, peek, body, probe));
+  document.body.append(root);
+  const S = U.sh = { root, peek, body, grab, headSlot, probe, feed, y: 0, H: 0, travel: 0, vis0: 132, open: false, busy: false, cancel: null };
+  S.start = new URLSearchParams(location.search).get('sheet') === 'open';
+
+  const move = (y) => {
+    const t = S.travel;
+    sheetSet(y < 0 ? -rubber(-y, 160) : y > t ? t + rubber(y - t, 160) : y);
+  };
+  const end = (moved, v) => {
+    S.busy = false;
+    if (!moved) { sheetGo(!S.open); return; }
+    sheetGo(S.y + project(v) < S.travel / 2, v);
+  };
+
+  // drag or tap the grabber / the peek
+  onDragY(peek, {
+    can: () => U.phone && !U.land,
+    begin: () => { if (S.cancel) { S.cancel(); S.cancel = null; } S.busy = true; return S.y; },
+    move,
+    end,
+  });
+  // a keyboard press on the grabber (detail 0); pointer taps are handled above
+  grab.addEventListener('click', (e) => { if (e.detail === 0) sheetGo(!S.open); });
+
+  // pull the open sheet down from its content when the content is scrolled to the top
+  let t = null;
+  body.addEventListener('touchstart', (e) => {
+    t = S.open && !U.land && e.touches.length === 1 && body.scrollTop <= 0
+      ? { y0: e.touches[0].clientY, on: false, s: 0, hist: [] } : null;
+  }, { passive: true });
+  body.addEventListener('touchmove', (e) => {
+    if (!t) return;
+    const y = e.touches[0].clientY;
+    if (!t.on) {
+      if (body.scrollTop > 0 || y - t.y0 < -2) { t = null; return; }
+      if (y - t.y0 < 3) return;
+      t.on = true; t.y0 = y; t.s = S.y; S.busy = true;
+      if (S.cancel) { S.cancel(); S.cancel = null; }
+    }
+    if (e.cancelable) e.preventDefault();
+    t.hist.push({ t: e.timeStamp, y });
+    if (t.hist.length > 8) t.hist.shift();
+    move(t.s + (y - t.y0));
+  }, { passive: false });
+  const tend = () => {
+    if (!t) return;
+    const g = t;
+    t = null;
+    if (g.on) end(true, velocity(g.hist));
+  };
+  body.addEventListener('touchend', tend);
+  body.addEventListener('touchcancel', tend);
+
+  // the bot card is a sheet of its own: swipe it down to close
+  const P = U.panel;
+  if (P) {
+    const C = P.card;
+    onDragY(C.root, {
+      can: (e) => U.phone && !U.land && !!e.target.closest('.bhq-hero, .bhq-cgrab') && !e.target.closest('button'),
+      begin: () => { if (U.cardStop) { U.cardStop(); U.cardStop = null; } return U.cardY; },
+      move: (y) => { U.cardY = y < 0 ? -rubber(-y, 120) : y; cardSet(U.cardY); },
+      end: (moved, v) => {
+        if (!moved) return;
+        const y = U.cardY;
+        if (y + project(v) > 130 || v > 900) {
+          const gone = C.root.offsetHeight + 24;
+          U.cardStop = springTo(y, gone, v, (n) => { U.cardY = n; cardSet(n); }, () => {
+            U.cardStop = null;
+            if (U.h.onSelectBot) U.h.onSelectBot(null);
+            setTimeout(() => { if (U.mode === 'card') { U.cardY = 0; cardSet(0); } }, 120); // nobody closed it: bring it back
+          }, 0.3, 1);
+        } else {
+          U.cardStop = springTo(y, 0, v, (n) => { U.cardY = n; cardSet(n); }, () => { U.cardStop = null; }, 0.4, Math.abs(v) > 600 ? 0.8 : 1);
+        }
+      },
+    });
+  }
+
+  if (typeof ResizeObserver === 'function') {
+    U.ro3 = new ResizeObserver(() => { sheetMeasure(); updateVis(); });
+    U.ro3.observe(root);
+    U.ro3.observe(peek);
+    if (P) U.ro3.observe(P.card.root);
+  }
+}
+
+function cardSet(y) { U.panel.card.root.style.transform = y ? 'translate3d(0,' + y.toFixed(1) + 'px,0)' : ''; }
+function cardReset() {
+  if (U.cardStop) { U.cardStop(); U.cardStop = null; }
+  U.cardY = 0;
+  if (U.panel) cardSet(0);
+}
+
+function sheetSet(y) {
+  const S = U.sh;
+  S.y = y;
+  S.root.style.transform = 'translate3d(0,' + y.toFixed(1) + 'px,0)';
+  // the content fades in as the sheet is pulled up, so nothing shows under the home indicator at the peek
+  S.body.style.opacity = clamp((S.travel - y) / 36, 0, 1).toFixed(2);
+  updateVis();
+}
+
+// Open (y = 0) or fold to the peek (y = travel), starting at the finger's velocity.
+function sheetGo(open, v0, instant) {
+  const S = U.sh;
+  if (!S || !U.phone) return;
+  S.open = !!open;
+  setAttr(S.grab, 'aria-expanded', S.open ? 'true' : 'false');
+  setAttr(S.grab, 'aria-label', S.open ? 'Collapse panel' : 'Expand panel');
+  setCls(S.root, 'is-open', S.open);
+  S.body.inert = !S.open && !U.land;
+  if (S.cancel) { S.cancel(); S.cancel = null; }
+  if (U.land) return;
+  const to = S.open ? 0 : S.travel;
+  if (instant || reducedMotion.matches || document.hidden) { sheetSet(to); return; }
+  S.cancel = springTo(S.y, to, v0 || 0, sheetSet, () => { S.cancel = null; }, S.open ? 0.4 : 0.34, Math.abs(v0 || 0) > 600 ? 0.82 : 1);
+}
+
+function sheetMeasure() {
+  const S = U && U.sh;
+  if (!S || !U.phone) return;
+  S.H = S.root.offsetHeight;
+  S.vis0 = S.peek.offsetHeight + S.probe.offsetHeight;
+  S.travel = U.land ? 0 : Math.max(0, S.H - S.vis0);
+  rootVar('--bhq-peek', S.vis0 + 'px');
+  if (U.land) { S.root.style.transform = ''; S.body.style.opacity = ''; S.y = 0; }
+  else if (!S.busy && !S.cancel) sheetSet(S.open ? 0 : S.travel);
+}
+
+// --bhq-vis: how much of the bottom is covered (the sheet, or the bot card). The zoom buttons ride on it and the
+// 3D view shifts by half the difference, so the building stays centred in the free space above.
+function updateVis() {
+  const S = U && U.sh;
+  if (!S || !U.phone) return;
+  const c = U.panel && U.panel.card.root;
+  let vis;
+  if (U.land) vis = 0;
+  else if (U.mode === 'card' && c && !c.hidden) vis = c.offsetHeight;
+  else vis = Math.max(0, S.H - clamp(S.y, -40, S.travel));
+  rootVar('--bhq-vis', Math.round(vis * 10) / 10 + 'px');
+}
+
+function watchPhone() {
+  if (typeof matchMedia !== 'function') return;
+  const a = matchMedia(MQ_PHONE), b = matchMedia(MQ_LAND);
+  U.mqs = [a, b];
+  U.mqFn = () => setPhone(a.matches, a.matches && b.matches);
+  a.addEventListener('change', U.mqFn);
+  b.addEventListener('change', U.mqFn);
+  U.mqFn();
+}
+
+function setPhone(on, land) {
+  const was = U.phone, S = U.sh, d = U.dock, p = U.panel;
+  U.phone = on;
+  U.land = on && land;
+  const html = document.documentElement;
+  html.classList.toggle('bhq-phone', on);
+  html.classList.toggle('bhq-land', U.land);
+  if (on && !was) {
+    if (p) S.headSlot.append(p.teamHead);
+    S.body.append(...[d && d.waiting.root, p && p.tcard, d && d.finished.root, d && d.routines.root, S.feed].filter(Boolean));
+    S.open = S.start || U.land;
+    S.start = false;
+    sheetMeasure();
+    sheetGo(S.open, 0, true);
+    U.chipFloor = null;
+  } else if (!on && was) {
+    if (S.cancel) { S.cancel(); S.cancel = null; }
+    S.root.style.transform = '';
+    S.body.style.opacity = '';
+    S.body.inert = false;
+    cardReset();
+    if (d) d.root.append(d.waiting.root, d.finished.root, d.routines.root);
+    if (p) p.team.append(p.teamHead, p.tcard);
+    if (S.feed) { if (d && d.root.parentNode) d.root.parentNode.insertBefore(S.feed, d.root); else document.body.append(S.feed); }
+    for (const k of Object.keys(rootVars)) document.documentElement.style.removeProperty(k);
+    rootVars = {};
+  } else if (on) {
+    if (U.land) S.open = true;
+    sheetMeasure();
+    sheetGo(S.open, 0, true);
+  }
+  layoutDock();
+  updateFades();
+  if (on && U.last.state) centerChip(U.activeFloorId);
+}
+
+// for tests and the harness: ?sheet=open does the same at load
+export function setSheetOpen(open) { sheetGo(!!open, 0, true); }
 
 /* ------------------------------------------------------------------ render */
 
@@ -856,6 +1163,14 @@ function renderFloors(state, o) {
     while (r.dotEls.length < ids.length) { const d = h('i', { class: 'bhq-dot' }); r.dotEls.push(d); r.dots.append(d); }
     while (r.dotEls.length > ids.length) r.dotEls.pop().remove();
     ids.forEach((id, k) => setAttr(r.dotEls[k], 'data-s', effStatus(bots[id])));
+    // phones: a corner dot on the chip of a floor where someone needs you (the dots row is hidden there)
+    let need = null;
+    for (const id of ids) {
+      const st = effStatus(bots[id]);
+      if (st === 'error') { need = 'error'; break; }
+      if (st === 'waiting_user' || st === 'stuck') need = 'waiting_user';
+    }
+    setAttr(r.btn, 'data-alert', need);
 
     const summary = countsText(fl.counts);
     setAttr(r.btn, 'aria-label', 'Floor ' + number + ', ' + (fl.name || fl.id) + ': ' + ids.length + ' ' + plural(ids.length, 'bot', 'bots') + (summary ? ' (' + summary + ')' : ''));
@@ -869,6 +1184,19 @@ function renderFloors(state, o) {
 
   reconcile(f.shaft, list.map((x) => U.floors.get(x.id).btn), 1); // child 0 is the car
   placeCar();
+  centerChip(activeId);
+}
+
+// phones: the floors are a scrolling chip row; bring the active chip to the middle when the floor changes
+function centerChip(activeId) {
+  const f = U.fl;
+  if (!U.phone || !activeId || U.chipFloor === activeId) return;
+  const r = U.floors.get(activeId);
+  if (!r || !r.btn.offsetWidth) return;
+  const first = U.chipFloor == null;
+  U.chipFloor = activeId;
+  const sc = f.fscroll, b = r.btn.getBoundingClientRect(), s = sc.getBoundingClientRect();
+  sc.scrollTo({ left: Math.max(0, sc.scrollLeft + (b.left - s.left) - (s.width - b.width) / 2), behavior: first || reducedMotion.matches ? 'auto' : 'smooth' });
 }
 
 // The lit pill is one element that slides between floors (the "elevator car").
@@ -911,6 +1239,8 @@ function renderPanel(state, o) {
     setHidden(p.team, mode === 'card');
     setHidden(p.card.root, mode === 'team');
     U.mode = mode;
+    if (mode === 'card') cardReset();
+    if (U.sh) { setCls(U.sh.root, 'is-away', mode === 'card'); updateVis(); } // phones: the bot sheet takes the bottom
   }
 
   if (mode === 'card') {
@@ -969,7 +1299,7 @@ function renderTeam(state, floor, o) {
     else if (s === 'waiting_user' || s === 'stuck') waiting++;
     else if (s === 'error') errors++;
   }
-  setText(p.teamSub, floor ? n + ' ' + plural(n, 'bot', 'bots') : 'Pick a floor on the left');
+  setText(p.teamSub, floor ? n + ' ' + plural(n, 'bot', 'bots') : (U.phone ? 'Pick a floor above' : 'Pick a floor on the left'));
   // green while anyone works, graphite at rest (the wallpaper's team card)
   setAttr(p.teamHead, 'data-s', working > 0 ? 'working' : 'idle');
   setNum(p.teamBig, working, animate);
