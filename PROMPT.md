@@ -28,12 +28,12 @@ curl -s -d '{"chat":{"Bot A":"grokbot://app/v1/agent?id=<bot id>"}}' https://ntf
 
 7. Create two routines for yourself. The channel forgets messages after 12 hours, so (a few minutes off schedule is fine):
 Every day around 08:00 my local time: post steps 3, 4, 5 and 6 again.
-Around 09:00, 13:00, 17:00 and 21:00 my local time: run your usage check, asking for the full list of bots (not only the top ones), and post one line. total_used_pct is how much of my weekly Grok Bot limit is used, in percent. bots is each bot's share of my Grok Bot usage this week, in percent; leave out bots under 1% and any field you don't know:
+Around 09:00, 13:00, 17:00 and 21:00 my local time: run your usage check, asking for the full list of bots (not only the top ones), and post one line. total_used_pct is the overall weekly limit used, in percent (the shared number, not only Grok Bot's part). bots is each of my bots' share of the usage this week, in percent (whole numbers are fine); leave out bots under 1%, rows that are not one of my bots (deleted bots, group chats, other people's bots) and any field you don't know:
 curl -s -d '{"type":"usage","total_used_pct":37,"resets_at":"<ISO time>","bots":{"Bot A":4.1}}' https://ntfy.sh/<TOPIC>
 
-8. Post one test status line for yourself, and your own routines line.
+8. Post one test status line for yourself, your own routines line, and one usage line now (as in step 7), so the dashboard shows the limit right away.
 
 9. Reply with this link first, with the real topic filled in, and one sentence saying the topic works like a password, so I should not share the link:
 https://bodila51.github.io/grokbot-wallpaper/#<TOPIC>
-Then, only if something did not work, add a short list of the problems. Do not post any other secret to the channel or in your reply.
+Then, only if something did not work, add a short list of the problems. Reply in the language I usually write to you in. Do not post any other secret to the channel or in your reply.
 ```
