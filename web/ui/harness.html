@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bot HQ UI harness</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="./ui.css">
+  <style>
+    /*
+     * The UI over a static render (mockups/diorama/scene.png) instead of the 3D canvas.
+     * Test URLs:  ?theme=day|golden|dusk|night|dawn   ?sel=<bot id>|none   ?floor=<floor id>   ?live=0 (freeze data)   ?shot (hide the dev bar)
+     */
+    #scene { background: none; cursor: default; }
+    #scene .plate {
+      position: absolute; inset: 0; background: url("../../mockups/diorama/scene.png") 50% 50% / cover no-repeat;
+      -webkit-mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, .35) 82%, transparent 97%);
+              mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, .35) 82%, transparent 97%);
+    }
+    /* crude night for the still image: navy multiply driven by --night (the real scene does this itself) */
+    #scene .plate::after {
+      content: ""; position: absolute; inset: 0; background: #1A2547; mix-blend-mode: multiply;
+      opacity: calc(var(--night) * .82);
+    }
+    .dev {
+      position: fixed; z-index: 30; left: 50%; top: 76px; transform: translateX(-50%) translateX(-70px);
+      display: flex; gap: 6px; align-items: center; padding: 4px; border-radius: 999px;
+      font: 500 12px/1 "Inter", system-ui, sans-serif; color: var(--muted);
+    }
+    .dev button {
+      font: inherit; color: var(--ink); background: none; border: 0; height: 28px; padding: 0 11px; border-radius: 999px; cursor: pointer;
+    }
+    .dev button:hover { background: var(--row-hover); }
+    .dev button[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-fg); }
+    .dev .sep { width: 1px; height: 14px; background: var(--hair); }
+    .dev label { display: inline-flex; gap: 6px; align-items: center; padding: 0 8px; cursor: pointer; }
+    .dev code { font: 11px ui-monospace, Menlo, Consolas, monospace; padding: 0 8px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    body.shot .dev { display: none; }
+  </style>
+</head>
+<body>
+  <main id="scene" aria-label="Офис"><div class="plate"></div></main>
+  <header id="topbar"></header>
+  <nav id="floors" aria-label="Этажи"></nav>
+  <aside id="panel" aria-label="Карточка бота и команда этажа"></aside>
+  <section id="feed" aria-label="Лента событий"></section>
+
+  <div class="dev bhq-glass" role="toolbar" aria-label="Стенд">
+    <button type="button" data-theme="day">День</button>
+    <button type="button" data-theme="dusk">Сумерки</button>
+    <button type="button" data-theme="night">Ночь</button>
+    <span class="sep"></span>
+    <button type="button" data-sel="none">Команда</button>
+    <button type="button" data-sel="codila-x-researcher">Бот</button>
+    <span class="sep"></span>
+    <label><input type="checkbox" id="live"> живые данные</label>
+    <code id="log">событий нет</code>
+  </div>
+
+  <script type="module">
+    import { initUI, renderUI } from './ui.js';
+
+    const q = new URLSearchParams(location.search);
+    const root = document.documentElement;
+    const $log = document.getElementById('log');
+    const log = (m) => { $log.textContent = m; };
+    if (q.has('shot')) document.body.classList.add('shot');
+
+    // --- theme: what the scene module does in the real page (data-daylight + --night)
+    const NIGHT = { day: 0, golden: 0.1, dusk: 0.55, night: 1, dawn: 0.45 };
+    function setTheme(name) {
+      if (!(name in NIGHT)) name = 'day';
+      root.setAttribute('data-daylight', name);
+      root.style.setProperty('--night', String(NIGHT[name]));
+      document.querySelectorAll('[data-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === name)));
+    }
+    document.querySelectorAll('[data-theme]').forEach((b) => b.addEventListener('click', () => setTheme(b.dataset.theme)));
+    setTheme(q.get('theme') || 'day');
+    if (q.has('flip')) { const [to, at] = q.get('flip').split('@'); setTimeout(() => setTheme(to), Number(at) || 1500); } // transition test
+
+    // --- data
+    const STEPS = {
+      working: ['пишу драфт поста', 'собираю данные', 'проверяю источники', 'рисую баннер, вариант 2', 'считаю охват 40 постов', 'разбираю новые закладки', 'сверяю расходы за месяц'],
+      idle: ['файл готов, жду новую задачу', 'остановился, ничего не запускаю', 'пятничный шторм готов'],
+      waiting_user: ['жду ответа: какой тред берём?', 'жду ок на бюджет $40', 'нужен выбор: вариант A или B'],
+      error: ['лимит X 429, повтор через 15 мин', 'не открылась страница, таймаут'],
+      done: ['отчёт готов', 'заметка опубликована'],
+    };
+    const MIX = ['working', 'working', 'working', 'working', 'idle', 'idle', 'waiting_user', 'error', 'done', 'stuck'];
+    const pick = (a) => a[Math.floor(Math.random() * a.length)];
+
+    const res = await fetch('../data/demo-state.json');
+    const state = await res.json();
+    for (const id of ['x-writer', 'grok-bot', 'codila-x-researcher']) state.bots[id].chat_url = 'grokbot://app/v1/agent?id=' + id;
+
+    const ctx = { currentFloor: q.get('floor') || 'x-content', selectedBot: q.get('sel') || null };
+    if (ctx.selectedBot === 'none') ctx.selectedBot = null;
+    const render = () => renderUI(state, ctx);
+    const syncDev = () => document.querySelectorAll('[data-sel]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.sel === 'none') === !ctx.selectedBot)));
+
+    initUI({
+      onSelectBot: (id) => { ctx.selectedBot = id; log('onSelectBot(' + id + ')'); syncDev(); render(); },
+      onSelectFloor: (id) => { ctx.currentFloor = id; ctx.selectedBot = null; log('onSelectFloor(' + id + ')'); syncDev(); render(); },
+      onZoom: (dir) => log('onZoom(' + dir + ')'),
+      onOpenChat: (id, url) => log('onOpenChat(' + id + ', ' + url + ')'),
+    });
+    document.querySelectorAll('[data-sel]').forEach((b) => b.addEventListener('click', () => {
+      ctx.selectedBot = b.dataset.sel === 'none' ? null : b.dataset.sel;
+      if (ctx.selectedBot) ctx.currentFloor = state.bots[ctx.selectedBot].floor;
+      syncDev(); render();
+    }));
+    syncDev();
+    render();
+
+    const base = Date.parse(state.now);
+    const t0 = Date.now();
+    let tick = 0;
+
+    function recount() {
+      const sum = { working: 0, idle: 0, waiting_user: 0, error: 0, stuck: 0, done: 0, total: 0 };
+      for (const f of state.floors) {
+        f.counts = { working: 0, idle: 0, waiting_user: 0, error: 0, stuck: 0, done: 0 };
+        for (const id of f.bots) {
+          const s = state.bots[id].effective_status;
+          f.counts[s]++; sum[s]++; sum.total++;
+        }
+      }
+      state.summary = sum;
+    }
+
+    function mutate() {
+      tick++;
+      state.version++;
+      state.now = new Date(base + (Date.now() - t0)).toISOString();
+      const id = pick(Object.keys(state.bots));
+      const bot = state.bots[id];
+      const kind = pick(MIX);
+      const status = kind === 'stuck' ? 'working' : kind;
+      const step = pick(STEPS[status]);
+      if (bot.effective_status !== kind) bot.since = state.now;
+      bot.status = status;
+      bot.effective_status = kind;
+      bot.step = step;
+      bot.last_event = state.now;
+      bot.today.events++;
+      bot.history.unshift({ t: state.now, status, step });
+      bot.history.length = Math.min(bot.history.length, 20);
+      state.feed.unshift({ t: state.now, bot: id, name: bot.name, status, step });
+      state.feed.length = Math.min(state.feed.length, 100);
+      if (tick % 20 === 0) { state.usage.total_used_pct = Math.min(100, state.usage.total_used_pct + 1); state.usage.updated_at = state.now; }
+      recount();
+    }
+
+    const live = document.getElementById('live');
+    live.checked = q.get('live') !== '0';
+    setInterval(() => {
+      if (live.checked) mutate();
+      render();
+    }, 1000);
+
+    window.__harness = { state, ctx, mutate, render, setTheme };
+  </script>
+</body>
+</html>

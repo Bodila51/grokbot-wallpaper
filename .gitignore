@@ -1,0 +1,15 @@
+# runtime: journal, password, config (never commit)
+data/
+node_modules/
+*.log
+
+# local design shots and build intermediates
+mockups/
+__pycache__/
+*.pyc
+*.blend1
+assets/_src/office/bake/
+assets/_src/office/bake2/
+assets/_src/office/kenney/*.zip
+assets/_src/office/kenney/Isometric/
+assets/_src/office/kenney/Side/
