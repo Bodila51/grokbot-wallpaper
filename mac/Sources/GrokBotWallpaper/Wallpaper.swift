@@ -81,6 +81,12 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
         }
     }
 
+    /// The bot's colour picked in the menu, re-applied after every load (the page's own choice if none was picked).
+    func applyBot() {
+        guard let bot = Settings.bot else { return }
+        webView.evaluateJavaScript("window.grokBot&&grokBot.setBot('\(bot)')", completionHandler: nil)
+    }
+
     func setFrame(_ frame: NSRect) {
         window.setFrame(frame, display: true)
     }
@@ -115,6 +121,7 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         cancelRetry()
+        applyBot()
         onLoad?()
     }
 

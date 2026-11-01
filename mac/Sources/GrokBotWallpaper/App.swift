@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var statusItem: NSStatusItem!
     private var dragItem: NSMenuItem!
     private var loginItem: NSMenuItem!
+    private var whiteBotItem: NSMenuItem!
+    private var blackBotItem: NSMenuItem!
     private var dragMode = false
     private var dragSince = Date.distantPast
     private var escMonitor: Any?
@@ -103,7 +105,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.delegate = self
         dragItem = menuItem("Двигать карточки", #selector(toggleDrag))
         loginItem = menuItem("Запускать при входе", #selector(toggleLogin))
+        whiteBotItem = menuItem("Бот: белый", #selector(chooseBot(_:)))
+        whiteBotItem.representedObject = "white"
+        blackBotItem = menuItem("Бот: чёрный", #selector(chooseBot(_:)))
+        blackBotItem.representedObject = "black"
         menu.addItem(dragItem)
+        menu.addItem(.separator())
+        menu.addItem(whiteBotItem)
+        menu.addItem(blackBotItem)
         menu.addItem(.separator())
         menu.addItem(menuItem("Обновить обои", #selector(reloadWallpapers)))
         menu.addItem(menuItem("Адрес обоев…", #selector(editAddress)))
@@ -123,6 +132,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         dragItem.state = dragMode ? .on : .off
+        let bot = Settings.bot ?? "white"
+        whiteBotItem.state = bot == "white" ? .on : .off
+        blackBotItem.state = bot == "black" ? .on : .off
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
@@ -164,6 +176,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: the other menu items
+
+    @objc private func chooseBot(_ sender: NSMenuItem) {
+        guard let bot = sender.representedObject as? String else { return }
+        Settings.bot = bot
+        for wallpaper in wallpapers.values { wallpaper.applyBot() }
+    }
 
     @objc private func reloadWallpapers() {
         let url = Settings.url
@@ -261,6 +279,18 @@ enum Settings {
     }
 
     static func resetURL() { UserDefaults.standard.removeObject(forKey: "wallpaperURL") }
+
+    /// "white" or "black" once picked in the menu; nil leaves the page's own choice (?bot=…, its localStorage).
+    static var bot: String? {
+        get {
+            switch UserDefaults.standard.string(forKey: "bot") {
+            case "black": return "black"
+            case "white": return "white"
+            default: return nil
+            }
+        }
+        set { UserDefaults.standard.set(newValue, forKey: "bot") }
+    }
 
     /// `defaults write io.github.bodila51.grokbot-wallpaper pauseWhenCovered -bool false` keeps the eyes fed
     /// even when macOS reports every wallpaper as covered.
