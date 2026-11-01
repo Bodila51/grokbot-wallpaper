@@ -1,6 +1,8 @@
-﻿# Build lively\dist\grokbot-wallpaper.zip: a Lively "webpage link" wallpaper that opens the LIVE page
-# <server>/face/ from the local Bot HQ server (nothing is copied, edits in web\ and assets\ show after a reload).
-# The view key from data\view-key.txt goes into the link, so the zip is git-ignored: never share it.
+﻿# Build lively\dist\grokbot-wallpaper.zip: a Lively web wallpaper whose index.html only redirects to the LIVE page
+# <server>/face/ on the local Bot HQ server (nothing is copied, edits in web\ and assets\ show after a reload).
+# Not a "webpage link" wallpaper: Lively gives LivelyProperties.json (bot color) only to local web wallpapers,
+# and it keeps sending them to the page after the redirect.
+# The view key from data\view-key.txt goes into index.html, so the zip is git-ignored: never share it.
 #   -NoShot   skip the fresh screenshot and use the committed lively\preview.jpg as the tile picture
 param([switch]$NoShot)
 $ErrorActionPreference = 'Stop'
@@ -22,9 +24,12 @@ $zip = Join-Path $dist 'grokbot-wallpaper.zip'
 $pkg = Join-Path $env:TEMP ('gbw-pkg-' + [guid]::NewGuid().ToString('N'))   # fresh staging folder, only the zip stays
 New-Item -ItemType Directory -Force $dist, $pkg | Out-Null
 
-$info = Get-Content (Join-Path $PSScriptRoot 'LivelyInfo.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-$info.FileName = $url
-[IO.File]::WriteAllText((Join-Path $pkg 'LivelyInfo.json'), ($info | ConvertTo-Json), (New-Object Text.UTF8Encoding $false))
+$redirect = "<!doctype html><meta charset=`"utf-8`"><title>Grok Bot</title><style>html{background:#000}</style>" +
+  "<script>location.replace($($url | ConvertTo-Json));</script>"
+[IO.File]::WriteAllText((Join-Path $pkg 'index.html'), $redirect, (New-Object Text.UTF8Encoding $false))
+Copy-Item (Join-Path $PSScriptRoot 'LivelyInfo.json') $pkg
+# Settings Lively shows under "Customise" and sends to the page as livelyPropertyListener(name, value).
+Copy-Item (Join-Path $PSScriptRoot 'LivelyProperties.json') $pkg
 
 # Tile picture: a fresh 640x360 shot of the live page (headless Edge), else the committed one.
 function Save-Shot([string]$from, [string]$jpg) {

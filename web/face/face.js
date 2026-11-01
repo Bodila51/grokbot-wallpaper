@@ -4,12 +4,12 @@
 // journal server); without it, the bundled demo state animates on its own. At most 30 frames per second.
 
 const STATUS = {
-  working: { text: 'работает', c: 'var(--working)' },
-  waiting_user: { text: 'ждёт тебя', c: 'var(--waiting)' },
-  error: { text: 'ошибка', c: 'var(--error)' },
-  stuck: { text: 'завис', c: 'var(--stuck)' },
-  done: { text: 'готово', c: 'var(--done)' },
-  idle: { text: 'отдыхает', c: 'var(--idle)' },
+  working: { text: 'working', c: 'var(--working)' },
+  waiting_user: { text: 'waiting for you', c: 'var(--waiting)' },
+  error: { text: 'error', c: 'var(--error)' },
+  stuck: { text: 'stuck', c: 'var(--stuck)' },
+  done: { text: 'done', c: 'var(--done)' },
+  idle: { text: 'resting', c: 'var(--idle)' },
 };
 const ORDER = ['waiting_user', 'error', 'stuck', 'working', 'done', 'idle'];
 const SHAPES = ['sphere', 'rounded_square', 'pill', 'triangle', 'pentagon', 'hexagon', 'star4', 'star6', 'clover', 'rounded_cube', 'cone', 'trio'];
@@ -38,7 +38,8 @@ const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 fetch('../assets/face/eyes.json').then((r) => r.json()).then((info) => {
   for (const name of ['l', 'r']) {
     const e = info[name], els = [...document.querySelectorAll(`.eye[data-eye="${name}"]`)];
-    for (const el of els) Object.assign(el.style, {
+    const white = document.querySelector(`.eye-w[data-eye="${name}"]`);   // the black bot's eye: the same, made light
+    for (const el of [...els, white]) Object.assign(el.style, {
       left: pct(e.x / SPHERE.w), top: pct(e.y / SPHERE.h), width: pct(e.w / SPHERE.w), height: pct(e.h / SPHERE.h),
       transformOrigin: `${pct((e.cx - e.x) / e.w)} ${pct((e.cy - e.y) / e.h)}`,
     });
@@ -54,7 +55,7 @@ fetch('../assets/face/eyes.json').then((r) => r.json()).then((info) => {
       return [u[0] * a + v[0] * b, u[1] * a + v[1] * b];
     });
     eyes.push({
-      els, p, t1, t2, inv: [t2[1] / det, -t2[0] / det, -t1[1] / det, t1[0] / det], rim,
+      els, white, p, t1, t2, inv: [t2[1] / det, -t2[0] / det, -t1[1] / det, t1[0] / det], rim,
       // the dark pill in the layer's own pixels: centre, length along its lean, width across it
       pill: { x: e.cx - e.x, y: e.cy - e.y, w: e.w, len, wid, u, v },
     });
@@ -192,8 +193,11 @@ function draw(now) {
   for (const e of eyes) {
     const { p, m } = pose(e, gaze.yaw.x, gaze.pitch.x);
     const tf = `translate(${((p[0] - e.p[0]) * R).toFixed(2)}px, ${((p[1] - e.p[1]) * R).toFixed(2)}px) matrix(${m.map((v) => v.toFixed(4)).join(', ')}, 0, 0) scale(${s.toFixed(4)})`;
-    const clip = capsule(e.pill, o, e.els[0].offsetWidth / e.pill.w);
-    for (const el of e.els) { el.style.transform = tf; el.style.clipPath = clip; }
+    const k = botEl.clientWidth / SPHERE.w, black = botColor === 'black';
+    const clip = capsule(e.pill, o, k);
+    if (tf + clip === e.drawn) continue;                 // nothing moved: no restyle, no repaint
+    e.drawn = tf + clip;
+    for (const el of black ? [e.white] : e.els) { el.style.transform = tf; el.style.clipPath = clip; }
   }
 }
 
@@ -202,7 +206,7 @@ function frame(now) {
   requestAnimationFrame(frame);
   if (document.hidden) { last = now; return; }
   acc += now - last; last = now;
-  if (acc < 1000 / 30) return;                           // 30 fps is plenty for a wallpaper
+  if (acc < 1000 / (lite ? 24 : 30)) return;             // 30 fps is plenty for a wallpaper, 24 on a weak computer
   const dt = Math.min(0.05, acc / 1000); acc = 0;
   look(now);
   for (const s of Object.values(gaze)) {
@@ -258,14 +262,10 @@ const $ = (id) => document.getElementById(id);
 const stack = $('w-stack'), team = $('team'), grid = $('bot-grid'), needs = $('bot-needs'), tip = $('tip');
 const NEEDS = ['waiting_user', 'error', 'stuck'], NEEDS_FIRST = ['error', 'waiting_user', 'stuck'];
 const TONE = { waiting_user: 'is-waiting', stuck: 'is-waiting', error: 'is-error' };
-const ASKS = { waiting_user: 'ждёт твоего ответа', stuck: 'завис, загляни', error: 'ошибка' };
+const ASKS = { waiting_user: 'needs your reply', stuck: 'stuck, take a look', error: 'error' };
 let looks = {}, state = null, byId = {}, crew = '';
 
 function statusOf(b) { return STATUS[b.effective_status || b.status] ? (b.effective_status || b.status) : 'idle'; }
-function plural(n, one, few, many) {
-  const a = n % 10, b = n % 100;
-  return a === 1 && b !== 11 ? one : a >= 2 && a <= 4 && (b < 12 || b > 14) ? few : many;
-}
 const byName = (a, b) => String(a.name).localeCompare(String(b.name));
 
 function render(st) {
@@ -277,9 +277,9 @@ function render(st) {
   countTo($('n-waiting'), waiting);
   countTo($('n-error'), counts.error);
   countTo($('bot-total'), bots.length);
-  $('l-working').textContent = plural(counts.working, 'работает', 'работают', 'работают');
-  $('l-waiting').textContent = plural(waiting, 'ждёт', 'ждут', 'ждут');
-  $('l-error').textContent = plural(counts.error, 'ошибка', 'ошибки', 'ошибок');
+  $('l-working').textContent = 'working';
+  $('l-waiting').textContent = 'waiting';
+  $('l-error').textContent = counts.error === 1 ? 'error' : 'errors';
   $('row-waiting').classList.toggle('is-zero', !waiting);
   $('row-error').classList.toggle('is-zero', !counts.error);
   team.classList.toggle('is-working', counts.working > 0);           // green while anyone works, graphite at rest
@@ -287,6 +287,7 @@ function render(st) {
   const pct = Math.max(0, Math.min(100, Math.round(st.usage?.total_used_pct ?? 0)));
   $('usage').textContent = `${pct}%`;
   team.style.setProperty('--p', (pct / 100).toFixed(3));
+  team.querySelector('.meter').hidden = st.usage?.total_used_pct == null;   // no usage report (the bots' own channel): no slider
 
   byId = Object.fromEntries(bots.map((b) => [b.id, b]));
   // who needs the user: a card each, two at most, most urgent first; a card that stays keeps its element
@@ -349,6 +350,8 @@ function countTo(el, to) {                               // numbers roll to thei
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+  // a page that isn't painting (hidden, paused by the wallpaper host) never runs that tick: land on the number anyway
+  setTimeout(() => { if (Number(el.dataset.v) === to) el.textContent = to; }, dur + 120);
 }
 
 // hover an avatar: its name, status and what it is doing now; while the cursor is on the cards, Grok Bot's eyes widen
@@ -450,10 +453,205 @@ let leanLast = performance.now();
     lean[i].ty.t = REDUCED ? 0 : Math.max(-1, Math.min(1, dx)) * 4 * near;
     lean[i].tx.t = REDUCED ? 0 : Math.max(-1, Math.min(1, -dy)) * 4 * near;
     stepSpring(lean[i].tx, dt); stepSpring(lean[i].ty, dt);
+    const tilt = `${lean[i].tx.x.toFixed(2)}|${lean[i].ty.x.toFixed(2)}`;
+    if (tilt === w.tilt) return;                         // at rest: leave the styles alone
+    w.tilt = tilt;
     w.el.style.setProperty('--tx', `${lean[i].tx.x.toFixed(2)}deg`);
     w.el.style.setProperty('--ty', `${lean[i].ty.x.toFixed(2)}deg`);
   });
 })(performance.now());
+
+// ---------- the sky: the four moods of the approved picture, blended by the real time of day ----------
+// Morning, day, evening and night anchor at the real sunrise and sunset of the day, where the viewer is (the time
+// zone's city, or ?lat=..&lon=..), so evenings come early in winter and late in summer; in between, every colour,
+// glow and the stars ease from one mood to the next (smoothstep), repainted every 20 s, so the light never jumps.
+const MOODS = {
+  night: { sky: ['#010F2E', '#051536', '#132856', '#29457D', '#41639C'], glow: '#9FB4E0', glowA: 0.22, rim: '#C9D6F2', rimA: 0.7, edgeA: 0, mul: '#8391B5', scr: '#000000', mist: 0, stars: 1, star1: 1 },
+  dawn: { sky: ['#97B3F6', '#AFBBF4', '#E5D0E4', '#DDBDCB', '#DECADF'], glow: '#FFD3C8', glowA: 0.45, rim: '#FFE0D6', rimA: 0.85, edgeA: 0.75, mul: '#FFFFFF', scr: '#3F3045', mist: 0.55, stars: 0, star1: 0 },
+  day: { sky: ['#88BAF9', '#9CC4FA', '#C4DBF9', '#E4E5F0', '#E2E6F3'], glow: '#FFFFFF', glowA: 0.35, rim: '#FFFFFF', rimA: 0.8, edgeA: 0.9, mul: '#FFFFFF', scr: '#24293B', mist: 0.35, stars: 0, star1: 0 },
+  dusk: { sky: ['#102152', '#303563', '#9C696B', '#F99958', '#D27B5F'], glow: '#FFB070', glowA: 0.55, rim: '#FFD9A0', rimA: 0.95, edgeA: 0.15, mul: '#ADA9C2', scr: '#000000', mist: 0, stars: 0, star1: 0.9 },
+};
+const FIXED_DAY = [[0, 'night'], [300, 'night'], [405, 'dawn'], [570, 'day'], [990, 'day'], [1125, 'dusk'], [1245, 'night'], [1440, 'night']];
+const heldTime = params.get('time');                     // ?time=18:45 shows that moment, for screenshots
+const PLACES = {                                         // a city per common time zone, for the sun's times
+  'Europe/Sofia': [42.7, 23.3], 'Europe/Kiev': [50.45, 30.5], 'Europe/Kyiv': [50.45, 30.5], 'Europe/Moscow': [55.75, 37.6],
+  'Europe/Warsaw': [52.2, 21], 'Europe/Berlin': [52.5, 13.4], 'Europe/Paris': [48.85, 2.35], 'Europe/London': [51.5, -0.1],
+  'Europe/Madrid': [40.4, -3.7], 'Europe/Rome': [41.9, 12.5], 'Europe/Istanbul': [41, 29], 'Asia/Dubai': [25.2, 55.3],
+  'Asia/Kolkata': [28.6, 77.2], 'Asia/Singapore': [1.35, 103.8], 'Asia/Tokyo': [35.7, 139.7], 'Australia/Sydney': [-33.9, 151.2],
+  'America/New_York': [40.7, -74], 'America/Chicago': [41.9, -87.6], 'America/Denver': [39.7, -105], 'America/Los_Angeles': [34.05, -118.25],
+  'America/Sao_Paulo': [-23.55, -46.6],
+};
+function wherePlace() {
+  if (params.has('lat') && params.has('lon')) return [Number(params.get('lat')), Number(params.get('lon'))];
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return PLACES[zone] || [45, -new Date().getTimezoneOffset() / 4];   // unknown zone: mid latitudes, longitude from the offset
+}
+// sunrise and sunset in minutes after local midnight (the standard sunrise equation); null near the poles
+function sunTimes(d, [lat, lon]) {
+  const rad = Math.PI / 180, noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
+  const n = Math.round(noon / 864e5 + 2440587.5 - 2451545 + 0.0008), J = n - lon / 360;
+  const M = (357.5291 + 0.98560028 * J) % 360, C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const L = (M + C + 180 + 102.9372) % 360, transit = 2451545 + J + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * L * rad);
+  const dec = Math.asin(Math.sin(L * rad) * Math.sin(23.4397 * rad));
+  const cosW = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
+  if (Math.abs(cosW) > 1) return null;
+  const w = Math.acos(cosW) / rad / 360, local = (jd) => { const t = new Date((jd - 2440587.5) * 864e5); return t.getHours() * 60 + t.getMinutes(); };
+  return [local(transit - w), local(transit + w)];
+}
+function dayPlan(d) {                                    // the anchors of today's sky
+  const sun = sunTimes(d, wherePlace());
+  if (!sun) return FIXED_DAY;
+  const [rise, set] = sun, mid = (rise + set) / 2;
+  const dayFrom = Math.min(rise + 130, mid), dayTo = Math.max(set - 110, mid);
+  return [[0, 'night'], [Math.max(1, rise - 100), 'night'], [rise + 15, 'dawn'], [dayFrom, 'day'], [dayTo, 'day'],
+    [set + 15, 'dusk'], [Math.min(1439, set + 110), 'night'], [1440, 'night']];
+}
+const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const mixHex = (a, b, k) => `#${rgb(a).map((v, i) => Math.round(v + (rgb(b)[i] - v) * k).toString(16).padStart(2, '0')).join('')}`;
+function paintSky() {
+  const d = new Date(), [hh, mm] = heldTime ? heldTime.split(':').map(Number) : [d.getHours(), d.getMinutes() + d.getSeconds() / 60];
+  const min = (((hh * 60 + mm) % 1440) + 1440) % 1440, DAY = dayPlan(d);
+  const i = DAY.findIndex(([m]) => m > min), [m0, from] = DAY[i - 1], [m1, to] = DAY[i];
+  const t = (min - m0) / (m1 - m0), k = t * t * (3 - 2 * t), A = MOODS[from], B = MOODS[to];
+  const css = document.documentElement.style, num = (key) => (A[key] + (B[key] - A[key]) * k).toFixed(3);
+  A.sky.forEach((c, n) => css.setProperty(`--sky-${n}`, mixHex(c, B.sky[n], k)));
+  for (const key of ['glow', 'rim', 'mul', 'scr']) css.setProperty(`--${key}`, mixHex(A[key], B[key], k));
+  css.setProperty('--glow-a', num('glowA')); css.setProperty('--rim-a', num('rimA')); css.setProperty('--edge-a', num('edgeA'));
+  for (const key of ['mist', 'stars', 'star1']) css.setProperty(`--${key}`, num(key));
+}
+paintSky();
+setInterval(paintSky, 20000);
+
+(function scatterStars() {                               // sparse, tiny, in the upper sky only; a few twinkle
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  document.querySelector('.stars').innerHTML = Array.from({ length: 46 }, () => {
+    const x = 2 + rnd() * 96, y = 2 + rnd() * 40, s = rnd() < 0.15 ? 2.2 : 1 + rnd() * 0.8, o = 0.35 + rnd() * 0.6;
+    return `<i${rnd() < 0.25 ? ' class="tw"' : ''} style="left:${x.toFixed(2)}%;top:${y.toFixed(2)}%;width:${s.toFixed(1)}px;height:${s.toFixed(1)}px;opacity:${o.toFixed(2)};animation-delay:${(-rnd() * 5).toFixed(1)}s"></i>`;
+  }).join('');
+})();
+
+// ---------- weak computers: the same picture with fewer moving extras ----------
+// Lite mode keeps what matters (the eyes, blinks, the sky, the cards' data) and stops the decorative loops: the bot's
+// breathing, the light flowing inside the cards, twinkling stars. It turns on for few CPU threads or little memory,
+// for ?lite=1, or when the first seconds run slowly; ?lite=0 forces the full version.
+let lite = params.get('lite') === '1' || (params.get('lite') !== '0' && ((navigator.hardwareConcurrency || 8) <= 4 || (navigator.deviceMemory || 8) <= 4));
+document.documentElement.classList.toggle('lite', lite);
+if (!lite && params.get('lite') !== '0') {
+  const gaps = [];
+  let prev = performance.now();
+  requestAnimationFrame(function probe(now) {             // two seconds of frame timing, once, after the start
+    gaps.push(now - prev); prev = now;
+    if (gaps.length < 120) return void requestAnimationFrame(probe);
+    gaps.sort((a, b) => a - b);
+    if (!document.hidden && gaps[60] > 25) { lite = true; document.documentElement.classList.add('lite'); }   // under ~40 fps
+  });
+}
+
+// ---------- white or black Grok Bot: the user's choice, remembered ----------
+// Lively's settings call livelyPropertyListener, the Mac app calls grokBot.setBot, a link can say ?bot=black.
+// The black bot is the same ball in glossy black (same volume and shading) with the same painted eyes made light;
+// the eyes move, blink and keep clear of the edge exactly as the white bot's do.
+let botColor = 'white';
+const ballImg = botEl.querySelector('.ball');
+function setBot(color) {
+  botColor = color === 'black' ? 'black' : 'white';
+  document.documentElement.dataset.bot = botColor;
+  ballImg.src = `../assets/face/${botColor === 'black' ? 'sphere-black' : 'sphere'}.png`;
+  for (const e of eyes) e.drawn = '';                    // redraw the eyes in their new form
+  try { localStorage.setItem('gbw.bot', botColor); } catch { /* private mode: not remembered */ }
+}
+setBot(params.get('bot') || (() => { try { return localStorage.getItem('gbw.bot'); } catch { return null; } })() || 'white');
+window.grokBot = { setBot };
+window.livelyPropertyListener = (name, value) => {
+  if (name === 'botColor') setBot(Number(value) === 1 ? 'black' : 'white');
+  if (name === 'feed') {                                 // the user's bots channel, typed into Lively's settings
+    const next = String(value ?? '').trim();
+    if (next === (FEED || '')) return;
+    try { if (next) localStorage.setItem('gbw.feed', next); else localStorage.removeItem('gbw.feed'); } catch { /* not remembered */ }
+    location.replace(location.pathname + (next ? `?feed=${encodeURIComponent(next)}` : ''));
+  }
+};
+
+// ---------- the user's own bots: their channel on ntfy.sh ----------
+// A link with ?feed=<channel> (remembered after that) connects the wallpaper to the user's bots. Every bot posts one
+// line per status change, {"bot":"…","status":"…","step":"…"}, to https://ntfy.sh/<channel> with plain curl; nothing
+// else runs on the bots' box. The page reads the channel's last 12 hours, then listens live.
+const FEED = params.get('feed') || (() => { try { return localStorage.getItem('gbw.feed'); } catch { return null; } })();
+if (params.get('feed')) { try { localStorage.setItem('gbw.feed', FEED); } catch { /* private mode: not remembered */ } }
+const CYR = {
+  а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o',
+  п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e',
+  ю: 'yu', я: 'ya', і: 'i', ї: 'yi', є: 'ye', ґ: 'g',
+};
+const SLUG_ALIASES = { 'trendy-x-zakladki-i-mega-okhvat': 'trendy-x' };   // as the server names them (server/state.js)
+const WORDS = {
+  working: 'working', running: 'working', busy: 'working', active: 'working', in_progress: 'working', started: 'working',
+  waiting_user: 'waiting_user', waiting: 'waiting_user', needs_user: 'waiting_user', waiting_for_user: 'waiting_user',
+  error: 'error', failed: 'error', fail: 'error', failure: 'error', stuck: 'stuck',
+  done: 'done', finished: 'done', complete: 'done', completed: 'done', success: 'done',
+  idle: 'idle', resting: 'idle', sleeping: 'idle', paused: 'idle', stopped: 'idle',
+};
+function botId(name) {
+  const s = String(name).normalize('NFC').toLowerCase().replace(/[а-яёіїєґ]/g, (c) => CYR[c] ?? '').normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/g, '');
+  return SLUG_ALIASES[s] || s || `bot-${hash(String(name)).toString(36)}`;
+}
+function applyLine(text, time) {                         // one bot's status line (or the roster); false if neither
+  let ev;
+  try { ev = JSON.parse(text); } catch { return false; }
+  const at = new Date((Number(time) || Date.now() / 1000) * 1000).toISOString();
+  if (Array.isArray(ev?.roster)) {                       // {"roster":[names]}: every bot shows up, resting until it posts
+    for (const raw of ev.roster.slice(0, 200)) {
+      const name = String(raw ?? '').trim().slice(0, 60), id = name && botId(name);
+      if (id && !state.bots[id]) state.bots[id] = { id, name, step: '', status: 'idle', effective_status: 'idle', last_event: at };
+    }
+    return true;
+  }
+  const name = String(ev?.bot ?? '').trim().slice(0, 60);
+  if (!name) return false;
+  const id = botId(name), b = state.bots[id] || (state.bots[id] = { id, name });
+  const word = String(ev.status ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  b.name = name;
+  b.step = String(ev.step ?? '').slice(0, 80);
+  b.status = b.effective_status = WORDS[word] || (b.step ? 'working' : 'idle');
+  b.last_event = at;
+  return true;
+}
+// the channel keeps 12 hours, the wallpaper remembers every bot it has seen: a quiet bot stays on screen, resting
+const MEMORY_KEY = `gbw.bots.${FEED}`;
+function remember() { try { localStorage.setItem(MEMORY_KEY, JSON.stringify(state.bots)); } catch { /* not remembered */ } }
+function settleQuiet() {                                 // a finished task rests after 30 min, a silent one after 3 h
+  const now = Date.now();
+  let changed = false;
+  for (const b of Object.values(state.bots)) {
+    const quiet = now - Date.parse(b.last_event);
+    if ((b.status === 'done' && quiet > 30 * 60e3) || (b.status === 'working' && quiet > 3 * 3600e3)) { b.status = b.effective_status = 'idle'; changed = true; }
+  }
+  return changed;
+}
+async function connectFeed() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; } catch { /* nothing remembered yet */ }
+  state = { bots: saved, usage: null };
+  const base = `https://ntfy.sh/${encodeURIComponent(FEED)}`;
+  try {
+    const text = await (await fetch(`${base}/json?poll=1&since=12h`, { cache: 'no-store' })).text();
+    for (const line of text.split('\n')) {
+      if (!line) continue;
+      const m = JSON.parse(line);
+      if (m.event === 'message') applyLine(m.message, m.time);
+    }
+  } catch { /* offline for now: show what is remembered, the live stream fills it */ }
+  settleQuiet();
+  remember();
+  render(state);
+  const live = new EventSource(`${base}/sse`);
+  live.onmessage = (e) => {
+    try { const m = JSON.parse(e.data); if (m.event === 'message' && applyLine(m.message, m.time)) { remember(); render(state); } } catch { /* not a status line */ }
+  };
+  setInterval(() => { if (settleQuiet()) { remember(); render(state); } }, 60e3);
+}
 
 // ---------- data: the live server, else the bundled demo ----------
 async function poll() {
@@ -480,4 +678,4 @@ async function startDemo() {
   }, 3500);
 }
 fetch('../data/demo-looks.json').then((r) => (r.ok ? r.json() : {})).then((j) => { looks = j.looks || j || {}; if (state) { crew = ''; needs.innerHTML = ''; render(state); } }).catch(() => {});
-poll();
+if (FEED) connectFeed(); else poll();

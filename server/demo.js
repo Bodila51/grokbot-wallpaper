@@ -7,39 +7,39 @@ import { makeTime } from './util.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const G_COORD = 'Координация';
-const G_X = 'X-контент';
-const G_PUB = 'Публикации';
-const G_FIN = 'Финансы';
+const G_COORD = 'Coordination';
+const G_X = 'X content';
+const G_PUB = 'Publishing';
+const G_FIN = 'Finance';
 const TASKS = {
-  [G_COORD]: ['План задач на неделю', 'Разбор входящих идей', 'Сводка по всем этажам', 'Проверка лимитов недели'],
-  [G_X]: ['Тред про AI-агентов на понедельник', 'Обложки для серии постов', 'Отчёт по охватам за неделю', 'Разбор постов конкурентов', 'Подборка цитат для QT'],
-  [G_PUB]: ['Выпуск Substack на пятницу', 'Кампания X Ads на ноябрь'],
-  [G_FIN]: ['Разбор портфеля за месяц', 'Бюджет команды на ноябрь'],
+  [G_COORD]: ['Weekly task plan', 'Sorting incoming ideas', 'Summary across all floors', 'Weekly limit check'],
+  [G_X]: ['Thread on AI agents for Monday', 'Covers for a post series', 'Weekly reach report', 'Competitor post review', 'Quote picks for QT'],
+  [G_PUB]: ['Friday Substack issue', 'X Ads campaign for November'],
+  [G_FIN]: ['Monthly portfolio review', 'Team budget for November'],
 };
 
 export const DEMO_BOTS = [
-  { name: 'Grok Bot', group: G_COORD, steps: ['R4: сканирую X, 7 поисков', 'раздаю задачи по этажам', 'сверяю очередь публикаций', 'собираю сводку за час', 'проверяю лимиты недели'] },
-  { name: 'Jevopus', group: G_COORD, steps: ['разбираю входящие идеи', 'раскладываю задачи по приоритетам', 'пишу план на завтра', 'проверяю, что завис, а что нет'] },
-  { name: 'X Writer', group: G_X, steps: ['пишу драфт поста про Topaz', 'переписываю хук в треде', 'сокращаю пост до 280 знаков', 'подбираю заголовок для треда', 'правлю тон под аудиторию'] },
-  { name: 'Banner & Visuals', group: G_X, steps: ['рисую обложку для треда', 'подбираю палитру баннера', 'экспортирую превью 1600x900', 'ретуширую скриншот продукта'] },
-  { name: 'Analytics Analyst', group: G_X, steps: ['считаю охваты за неделю', 'сравниваю CTR двух постов', 'строю график вовлечённости', 'ищу лучшее время публикации'] },
-  { name: 'Competitor Watch', group: G_X, steps: ['слежу за 12 конкурентами', 'читаю свежие посты конкурентов', 'сохраняю удачные форматы', 'сверяю цены в их офферах'] },
-  { name: 'QT Scout', group: G_X, steps: ['ищу посты для цитирования', 'оцениваю охват кандидатов', 'отбираю 5 лучших цитат', 'проверяю репутацию автора'] },
-  { name: 'Ideas Sparring', group: G_X, steps: ['спорю с идеей про длинные треды', 'генерирую 10 углов для темы', 'ищу слабые места в аргументе', 'собираю контраргументы'] },
-  { name: 'Bookmarks Brain', group: G_X, steps: ['разбираю закладки по темам', 'вытаскиваю цитаты из сохранённого', 'ищу дубли в закладках', 'строю карту тем'] },
-  { name: 'Codila X Researcher', group: G_X, steps: ['читаю 40 свежих постов', 'исследую нишу AI-инструментов', 'выписываю повторяющиеся боли', 'собираю список источников'] },
-  { name: 'Тренды X: закладки и мега-охват', group: G_X, steps: ['скан трендов: 3 новых', 'считаю закладки на топ-постах', 'сверяю темы с моими', 'отбираю форматы с мега-охватом'] },
-  { name: 'Substack', group: G_PUB, steps: ['верстаю выпуск рассылки', 'проверяю ссылки в письме', 'пишу превью-текст', 'планирую отправку на 18:00'] },
-  { name: 'X Ads Manager', group: G_PUB, steps: ['проверяю бюджет кампании', 'сверяю ставки по аудиториям', 'останавливаю слабое объявление', 'собираю отчёт по рекламе'] },
-  { name: 'Warren Buffett', group: G_FIN, steps: ['читаю квартальный отчёт', 'считаю справедливую цену', 'сверяю мультипликаторы', 'пишу заметку об инвестиции'] },
-  { name: 'Finance Team', group: G_FIN, steps: ['сверяю доходы за неделю', 'разбираю подписки и расходы', 'собираю P&L за месяц', 'готовлю прогноз кэшфлоу'] },
+  { name: 'Grok Bot', group: G_COORD, steps: ['R4: scanning X, 7 searches', 'handing out tasks by floor', 'checking the publishing queue', 'collecting the hourly summary', 'checking weekly limits'] },
+  { name: 'Jevopus', group: G_COORD, steps: ['sorting incoming ideas', 'ranking tasks by priority', 'writing the plan for tomorrow', 'checking what is stuck and what is not'] },
+  { name: 'X Writer', group: G_X, steps: ['drafting a post about Topaz', 'rewriting the thread hook', 'cutting the post to 280 characters', 'picking a title for the thread', 'tuning the tone for the audience'] },
+  { name: 'Banner & Visuals', group: G_X, steps: ['drawing a thread cover', 'picking the banner palette', 'exporting a 1600x900 preview', 'retouching a product screenshot'] },
+  { name: 'Analytics Analyst', group: G_X, steps: ['counting weekly reach', 'comparing CTR of two posts', 'charting engagement', 'finding the best time to post'] },
+  { name: 'Competitor Watch', group: G_X, steps: ['watching 12 competitors', 'reading fresh competitor posts', 'saving formats that work', 'checking prices in their offers'] },
+  { name: 'QT Scout', group: G_X, steps: ['looking for posts to quote', 'rating reach of candidates', 'picking the 5 best quotes', 'checking the author\'s reputation'] },
+  { name: 'Ideas Sparring', group: G_X, steps: ['arguing with the long-thread idea', 'generating 10 angles for a topic', 'finding weak spots in an argument', 'collecting counterarguments'] },
+  { name: 'Bookmarks Brain', group: G_X, steps: ['sorting bookmarks by topic', 'pulling quotes from saved posts', 'finding duplicate bookmarks', 'mapping topics'] },
+  { name: 'Codila X Researcher', group: G_X, steps: ['reading 40 fresh posts', 'researching the AI tools niche', 'noting recurring pains', 'building a list of sources'] },
+  { name: 'Trendy X', group: G_X, steps: ['trend scan: 3 new', 'counting bookmarks on top posts', 'matching trends with my topics', 'picking formats with huge reach'] },
+  { name: 'Substack', group: G_PUB, steps: ['laying out the newsletter issue', 'checking links in the email', 'writing the preview text', 'scheduling the send for 18:00'] },
+  { name: 'X Ads Manager', group: G_PUB, steps: ['checking the campaign budget', 'comparing bids by audience', 'pausing a weak ad', 'building the ads report'] },
+  { name: 'Warren Buffett', group: G_FIN, steps: ['reading a quarterly report', 'estimating fair value', 'checking the multiples', 'writing an investment note'] },
+  { name: 'Finance Team', group: G_FIN, steps: ['reconciling weekly income', 'reviewing subscriptions and costs', 'building the monthly P&L', 'preparing the cash-flow forecast'] },
 ];
 
-const WAITING = ['жду ответа: публикуем?', 'нужен ок на бюджет', 'какой вариант берём?', 'подтверди текст перед отправкой', 'выбери обложку: A или B'];
-const ERRORS = ['лимит X 429, повтор через 15 мин', 'не открылся файл отчёта', 'таймаут при загрузке картинки', 'нет доступа к API'];
-const DONE = ['готово: отчёт отправлен', 'драфт готов', 'задача закрыта', 'выпуск собран'];
-const IDLE = ['жду новую задачу', 'отдыхаю до следующего запуска'];
+const WAITING = ['publish it?', 'approve the budget?', 'which version do we pick?', 'confirm the text before sending', 'pick a cover: A or B'];
+const ERRORS = ['X rate limit 429, retrying in 15 min', 'could not open the report file', 'timeout while loading an image', 'no access to the API'];
+const DONE = ['done: report sent', 'draft ready', 'task closed', 'issue assembled'];
+const IDLE = ['waiting for a new task', 'resting until the next run'];
 
 const rnd = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -111,7 +111,7 @@ export function createDemo({ journal, fast = false, tz = 'Europe/Sofia', now = D
     bots.forEach((bot, i) => {
       if (bot.name === 'Competitor Watch') {
         // silent for 45 minutes while "working": shows up as stuck
-        line(bot, 'working', 'слежу за 12 конкурентами', t0 - 45 * 60e3);
+        line(bot, 'working', 'watching 12 competitors', t0 - 45 * 60e3);
         bot.silentUntil = startedAt + (fast ? 60e3 : 5 * 60e3);
         return;
       }
