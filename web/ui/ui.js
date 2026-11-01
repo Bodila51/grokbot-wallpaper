@@ -1,67 +1,81 @@
 /*
- * Bot HQ UI: glass overlays on top of the full-bleed 3D scene (CONTRACT v2.3, look = mockups/diorama/mock.html).
- *   top-left   brand + live clock         top-center  status summary         top-right  DEMO + week usage
- *   left       floors "elevator"          right       bot card / floor team card
- *   bottom-left live feed (last 4)        bottom-right (left of the card)  zoom - / +
+ * Bot HQ UI: live cards on top of the full-bleed 3D scene (CONTRACT v2.3; look = the wallpaper's cards, web/face/face.css).
+ *   top-left   brand + live clock         top-center  status counters        top-right  DEMO + usage meter
+ *   left       floors "elevator"          right       floor team / bot card
+ *   left, under the floors   dock: Waiting on me / Finished / Routines
+ *   bottom-left activity feed (last 4)    bottom-right (left of the card)  zoom - / +
  *
  *   initUI({ onSelectBot, onSelectFloor, onZoom, onOpenChat })
  *   renderUI(state, { currentFloor, selectedBot })   // idempotent, cheap, safe to call every second
  *
+ * State fields read: bots, floors, feed, usage, demo, now, summary, plus (bots-only mode, may be missing):
+ *   bots[id].chat_url, state.finished [{ t, bot, name, step }], state.routines [{ bot, name, routine, schedule, next_run }].
+ *
  * Every DOM node is created once and then patched in place (text / attributes / classes only when the
  * value changed), so hover, focus and scroll positions survive the 1 Hz re-render.
  * All data goes into the DOM through textContent / setAttribute, never innerHTML.
- * Theme (day / night) is pure CSS: see web/styles.css (--night, data-daylight).
+ * The UI text is English. The cards are graphite at every hour; no day/night switch here (see ui.css).
  */
 
 // Resolved against this file, so it works from /web/index.html, from a server rooted at web/, and from the harness.
 const THUMB_BASE = new URL('../../assets/blobs/thumbs/', import.meta.url).href;
+// the product logo, exactly as is (a 400x400 square), shown small in the brand pill
+const MARK_SRC = new URL('../../assets/brand/logo-mark.png', import.meta.url).href;
 const FEED_ROWS = 4;
 const STEPS_SHOWN = 3;
 const FEED_OUT_MS = 420;
+const FINISHED_MAX = 60;
+const DAY_MS = 24 * 3600 * 1000;
+const LS_BLUR = 'bothq.waitBlur';
+const LS_DOCK = 'bothq.dock';
 
 const LABEL = {
-  working: 'работает',
-  idle: 'отдыхает',
-  waiting_user: 'ждёт тебя',
-  error: 'ошибка',
-  stuck: 'завис?',
-  done: 'готово',
+  working: 'working',
+  idle: 'resting',
+  waiting_user: 'waiting for you',
+  error: 'error',
+  stuck: 'stuck',
+  done: 'done',
 };
 const CHIP = {
-  working: 'Работает',
-  idle: 'Отдыхает',
-  waiting_user: 'Ждёт тебя',
-  error: 'Ошибка',
-  stuck: 'Завис?',
-  done: 'Готово',
+  working: 'Working',
+  idle: 'Resting',
+  waiting_user: 'Waiting for you',
+  error: 'Error',
+  stuck: 'Stuck',
+  done: 'Done',
 };
 
-// Russian plural forms [one, few, many] per status, for counters.
-const FORMS = {
-  working: ['работает', 'работают', 'работают'],
-  waiting_user: ['ждёт тебя', 'ждут тебя', 'ждут тебя'],
-  error: ['ошибка', 'ошибки', 'ошибок'],
-  stuck: ['завис?', 'завис?', 'завис?'],
-  idle: ['отдыхает', 'отдыхают', 'отдыхают'],
-  done: ['готово', 'готово', 'готово'],
+// Short counter words [one, many] per status.
+const WORDS = {
+  working: ['working', 'working'],
+  waiting_user: ['waiting', 'waiting'],
+  error: ['error', 'errors'],
+  stuck: ['stuck', 'stuck'],
+  idle: ['resting', 'resting'],
+  done: ['done', 'done'],
 };
 
-// Summary pill. "attention" folds stuck into waiting_user: both need a human.
+// Counters pill. "attention" folds stuck into waiting_user: both need a human.
 const SUMMARY = [
-  { key: 'working', s: 'working', n: (c) => c.working },
+  { key: 'working', s: 'working', lead: true, n: (c) => c.working },
   { key: 'attention', s: 'waiting_user', alert: true, n: (c) => c.waiting_user + c.stuck },
-  { key: 'error', s: 'error', n: (c) => c.error },
+  { key: 'error', s: 'error', alert: true, n: (c) => c.error },
   { key: 'idle', s: 'idle', n: (c) => c.idle },
   { key: 'done', s: 'done', n: (c) => c.done, hideZero: true },
 ];
 
-const USAGE_TITLE = { week: 'Неделя', day: 'День', month: 'Месяц' };
-const USAGE_SPENT = { week: 'Расход за неделю', day: 'Расход за день', month: 'Расход за месяц' };
+const USAGE_TITLE = { week: 'Week', day: 'Day', month: 'Month' };
+const USAGE_SPENT = { week: 'Usage this week', day: 'Usage today', month: 'Usage this month' };
 
 const ICON = {
   close: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   plus: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 3v10M3 8h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   minus: '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 8h10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  chev: '<svg class="bhq-chev" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  eyeOn: '<svg class="bhq-eye-on" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.6 8s2.4-4.4 6.4-4.4S14.4 8 14.4 8 12 12.4 8 12.4 1.6 8 1.6 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8" cy="8" r="1.9" fill="currentColor"/></svg>',
+  eyeOff: '<svg class="bhq-eye-off" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M1.6 8s2.4-4.4 6.4-4.4S14.4 8 14.4 8 12 12.4 8 12.4 1.6 8 1.6 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" opacity=".55"/><path d="M3 13L13 3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  check: '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M3.5 8.6l3 3 6-6.6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
 const reducedMotion = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : { matches: false };
@@ -73,7 +87,7 @@ let U = null; // set by initUI
 function freshState(handlers) {
   return {
     h: handlers || {},
-    top: null, fl: null, panel: null, feed: null, zoom: null, owned: [],
+    top: null, fl: null, panel: null, feed: null, zoom: null, dock: null, owned: [],
     last: { state: null, opts: { currentFloor: null, selectedBot: null } },
     skew: 0, nowStr: null,
     floors: new Map(), activeFloorId: null,
@@ -81,7 +95,7 @@ function freshState(handlers) {
     feedRows: new Map(), feedOut: new Set(), feedMode: null, feedFirst: true,
     failedThumbs: new Set(),
     mode: null, cardBot: null, teamFloor: null, teamReady: false, ready: false,
-    keyHandler: null, ro: null,
+    keyHandler: null, ro: null, ro2: null, onResize: null, timer: null, fades: [],
   };
 }
 
@@ -132,34 +146,53 @@ function setVar(n, name, v) {
 function setCls(n, cls, on) {
   if (n.classList.contains(cls) !== !!on) n.classList.toggle(cls, !!on);
 }
-function setWidth(n, w) {
-  if (n._w !== w) { n._w = w; n.style.width = w; }
+function setPx(n, prop, v) {
+  const k = '_px_' + prop;
+  if (n[k] === v) return;
+  n[k] = v;
+  n.style[prop] = v + 'px';
 }
 function clamp(v, lo, hi) { return Math.min(hi, Math.max(lo, v)); }
 function pad2(n) { return n < 10 ? '0' + n : String(n); }
 
-// Russian plural: one (1, 21), few (2-4, 22-24), many (0, 5-20, 25-30).
-function plural(n, one, few, many) {
-  n = Math.abs(Math.trunc(n));
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
+// A number that rolls to its new value instead of jumping (the wallpaper's counters). animate=false sets it at once.
+function setNum(n, v, animate) {
+  v = Math.max(0, Math.round(Number(v) || 0));
+  if (n._to === v) return;
+  const from = n._to == null ? 0 : n._to;
+  n._to = v;
+  if (n._raf) { cancelAnimationFrame(n._raf); n._raf = 0; }
+  if (n._tm) { clearTimeout(n._tm); n._tm = 0; }
+  if (animate === false || reducedMotion.matches || from === v) { n.textContent = String(v); return; }
+  const t0 = performance.now(), dur = 700;
+  const tick = (now) => {
+    const k = clamp((now - t0) / dur, 0, 1), e = 1 - Math.pow(1 - k, 3);
+    n.textContent = String(Math.round(from + (v - from) * e));
+    n._raf = k < 1 ? requestAnimationFrame(tick) : 0;
+  };
+  n._raf = requestAnimationFrame(tick);
+  // a page that is not painting (a hidden tab) never runs the tick: land on the number anyway
+  n._tm = setTimeout(() => { n._tm = 0; if (n._to === v) n.textContent = String(v); }, dur + 150);
+}
+
+function plural(n, one, many) {
+  return Math.abs(Math.trunc(n)) === 1 ? one : many;
 }
 function statusWord(s, n) {
-  const f = FORMS[s] || [s, s, s];
-  return plural(n, f[0], f[1], f[2]);
+  const f = WORDS[s] || [s, s];
+  return plural(n, f[0], f[1]);
 }
 
 function parseTs(s) {
   const t = typeof s === 'number' ? s : Date.parse(s);
   return Number.isFinite(t) ? t : null;
 }
+const TIME_GB = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
 function hhmm(ms) {
   if (ms == null) return '';
-  const d = new Date(ms);
-  return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
+  return TIME_GB.format(new Date(ms));
 }
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Server "now" estimated from the client clock: skew is refreshed whenever state.now changes.
 function syncClock(state) {
@@ -172,22 +205,48 @@ function nowMs() { return Date.now() - U.skew; }
 
 function fmtDur(ms) {
   const min = Math.floor(Math.max(0, ms) / 60000);
-  if (min < 1) return 'меньше минуты';
-  if (min < 60) return min + ' мин';
+  if (min < 1) return 'under a minute';
+  if (min < 60) return min + ' min';
   const hr = Math.floor(min / 60), m = min % 60;
-  if (hr < 24) return m ? hr + ' ч ' + m + ' мин' : hr + ' ч';
+  if (hr < 24) return m ? hr + ' h ' + m + ' min' : hr + ' h';
   const d = Math.floor(hr / 24), hh = hr % 24;
-  return hh ? d + ' д ' + hh + ' ч' : d + ' д';
+  return hh ? d + ' d ' + hh + ' h' : d + ' d';
 }
 function fmtLeft(ms) {
   const min = Math.floor(ms / 60000);
-  if (min < 1) return 'меньше минуты';
+  if (min < 1) return 'under a minute';
   const d = Math.floor(min / 1440), hr = Math.floor((min % 1440) / 60), m = min % 60;
-  if (d > 0) return d + ' д ' + hr + ' ч';
-  if (hr > 0) return hr + ' ч ' + m + ' мин';
-  return m + ' мин';
+  if (d > 0) return d + ' d ' + hr + ' h';
+  if (hr > 0) return hr + ' h ' + m + ' min';
+  return m + ' min';
 }
-const NUM1 = new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 });
+// "12 min ago"
+function relAgo(ms) {
+  const diff = nowMs() - ms;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return min + ' min ago';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + ' h ago';
+  return Math.floor(hr / 24) + ' d ago';
+}
+// "in 12 min", "in 3 h", "Tue 09:00" (local) when it is more than a day away
+function relIn(ms) {
+  const diff = ms - nowMs();
+  if (diff <= 0) return 'due now';
+  const min = Math.ceil(diff / 60000);
+  if (min < 60) return 'in ' + min + ' min';
+  const hr = Math.floor(min / 60), m = min % 60;
+  if (hr < 6) return m ? 'in ' + hr + ' h ' + m + ' min' : 'in ' + hr + ' h';
+  if (hr < 24) return 'in ' + hr + ' h';
+  const d = new Date(ms);
+  return WEEKDAY[d.getDay()] + ' ' + hhmm(ms);
+}
+function fullLocal(ms) {
+  const d = new Date(ms);
+  return WEEKDAY[d.getDay()] + ' ' + d.getDate() + '/' + pad2(d.getMonth() + 1) + ' ' + hhmm(ms);
+}
+const NUM1 = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 });
 function fmtHours(min) {
   const hr = Math.max(0, Number(min) || 0) / 60;
   return hr < 10 ? NUM1.format(hr) : String(Math.round(hr));
@@ -235,6 +294,25 @@ function restartAnim(n, cls) {
   n.classList.add(cls);
 }
 
+function lsGet(k) { try { return localStorage.getItem(k); } catch { return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { /* private mode: not remembered */ } }
+
+// Scroll edge effect: a scroller fades out where more content continues, instead of cutting a row in half.
+function watchFade(el) {
+  el.classList.add('bhq-fade');
+  el.addEventListener('scroll', () => updateFade(el), { passive: true });
+  U.fades.push(el);
+  return el;
+}
+function updateFade(el) {
+  const max = el.scrollHeight - el.clientHeight;
+  const t = max > 2 && el.scrollTop > 2, b = max > 2 && el.scrollTop < max - 2;
+  setVar(el, '--fade-t', t ? '20px' : '0px');
+  setVar(el, '--fade-b', b ? '22px' : '0px');
+  setAttr(el, 'data-fade', t || b ? '' : null);
+}
+function updateFades() { for (const el of U.fades) updateFade(el); }
+
 function counts(state) {
   const out = { working: 0, idle: 0, waiting_user: 0, error: 0, stuck: 0, done: 0 };
   const bots = state.bots;
@@ -249,33 +327,38 @@ function counts(state) {
   return out;
 }
 
-/* ------------------------------------------------------------------ avatars */
+/* ------------------------------------------------------------------ avatars: the 3D thumbnail, a lit status orb */
 
-function makeAvatar() {
+function makeAva(opts) {
+  opts = opts || {};
   const img = h('img', { class: 'bhq-av-img', alt: '', draggable: 'false', decoding: 'async' });
   const fb = h('span', { class: 'bhq-av-fb', 'aria-hidden': 'true' });
-  const root = h('span', { class: 'bhq-av' }, img, fb);
+  const inner = h('span', { class: 'bhq-av' }, img, fb);
+  const orb = opts.orb === false ? null : h('i', { class: 'bhq-orb', 'aria-hidden': 'true' });
+  const root = h('span', { class: 'bhq-ava' + (opts.cls ? ' ' + opts.cls : '') }, inner, orb);
   img.addEventListener('error', () => {
     if (img._name) U.failedThumbs.add(img._name);
-    root.classList.add('is-fb');
+    inner.classList.add('is-fb');
   });
-  img.addEventListener('load', () => root.classList.remove('is-fb'));
-  return { root, img, fb };
+  img.addEventListener('load', () => inner.classList.remove('is-fb'));
+  return { root, inner, img, fb };
 }
 
-function setAvatar(av, bot) {
+function setAvatar(av, bot, status) {
   const name = bot.avatar || bot.id || '';
   const color = isHex(bot.color) ? bot.color : '#A1A1A6';
   setVar(av.root, '--c', color);
   setVar(av.root, '--fg', textOn(color));
+  setCls(av.root, 'is-dark', lum(color) < 0.04); // a black bot gets a faint rim so it does not sink into the graphite
+  setAttr(av.root, 'data-s', status || null);
   setText(av.fb, initials(bot.name));
   if (av.img._name !== name) {
     av.img._name = name;
     if (!name || U.failedThumbs.has(name)) {
       av.img.removeAttribute('src');
-      av.root.classList.add('is-fb');
+      av.inner.classList.add('is-fb');
     } else {
-      av.root.classList.remove('is-fb');
+      av.inner.classList.remove('is-fb');
       av.img.src = THUMB_BASE + encodeURIComponent(name) + '.png';
     }
   }
@@ -288,22 +371,32 @@ function own(el) { U.owned.push(el); return el; }
 export function initUI(handlers) {
   if (U) {
     if (U.keyHandler) document.removeEventListener('keydown', U.keyHandler);
+    if (U.onResize) removeEventListener('resize', U.onResize);
     if (U.ro) U.ro.disconnect();
+    if (U.ro2) U.ro2.disconnect();
+    if (U.timer) clearInterval(U.timer);
     for (const el of U.owned) if (el.parentNode) el.remove();
   }
   U = freshState(handlers);
+  document.documentElement.lang = 'en';
 
   const topbar = document.getElementById('topbar');
   const floors = document.getElementById('floors');
   const panel = document.getElementById('panel');
   let feed = document.getElementById('feed');
-  if (!feed) { feed = own(h('section', { id: 'feed', 'aria-label': 'Лента событий' })); document.body.append(feed); }
+  if (!feed) { feed = own(h('section', { id: 'feed' })); document.body.append(feed); }
+  setAttr(feed, 'aria-label', 'Activity feed');
+  const scene = document.getElementById('scene');
+  if (scene) setAttr(scene, 'aria-label', 'Office');
+  if (floors) setAttr(floors, 'aria-label', 'Floors');
+  if (panel) setAttr(panel, 'aria-label', 'Bot card and floor team');
 
   if (topbar) buildTopbar(topbar); else console.warn('[ui] #topbar not found');
   if (floors) buildFloors(floors); else console.warn('[ui] #floors not found');
   if (panel) buildPanel(panel); else console.warn('[ui] #panel not found');
   buildFeed(feed);
   buildZoom();
+  buildDock(floors, feed);
 
   U.keyHandler = (e) => {
     if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -312,6 +405,12 @@ export function initUI(handlers) {
     if (U.last.opts.selectedBot && U.h.onSelectBot) U.h.onSelectBot(null);
   };
   document.addEventListener('keydown', U.keyHandler);
+
+  // relative times ("12 min ago", "in 3 h") move on even when no new state arrives
+  U.timer = setInterval(() => {
+    if (document.hidden || !U.last.state) return;
+    safe('dock', () => U.dock && renderDock(U.last.state));
+  }, 15000);
 }
 
 /* ------------------------------------------------------------------ build: top bar */
@@ -320,32 +419,32 @@ function buildTopbar(root) {
   root.textContent = '';
 
   const clock = h('span', { class: 'bhq-num bhq-clock', text: '--:--' });
-  const brand = h('div', { class: 'bhq-brand bhq-glass' },
-    h('span', { class: 'bhq-mark', 'aria-hidden': 'true' }, h('i')),
+  const brand = h('div', { class: 'bhq-brand bhq-surface' },
+    h('img', { class: 'bhq-mark', src: MARK_SRC, alt: '', draggable: 'false' }),
     h('b', { class: 'bhq-word', text: 'Grok Bot Wallpaper' }),
     h('span', { class: 'bhq-sep', 'aria-hidden': 'true' }),
     h('span', { class: 'bhq-live' }, h('i', { class: 'bhq-dot bhq-live-dot', 'aria-hidden': 'true' }), 'Live · ', clock));
 
   const chips = {};
-  const summary = h('div', { class: 'bhq-summary bhq-glass', role: 'group', 'aria-label': 'Статусы ботов' });
+  const summary = h('div', { class: 'bhq-summary bhq-surface', role: 'group', 'aria-label': 'Bot statuses' });
   for (const p of SUMMARY) {
     const num = h('b', { class: 'bhq-num' });
     const label = h('span');
-    const el = h('span', { class: 'bhq-schip' + (p.alert ? ' is-alert-kind' : ''), 'data-s': p.s },
-      h('i', { class: 'bhq-dot', 'aria-hidden': 'true' }), num, label);
+    const el = h('span', { class: 'bhq-schip' + (p.lead ? ' bhq-schip--lead' : ''), 'data-s': p.s },
+      h('i', { class: 'bhq-dot', 'data-s': p.s, 'aria-hidden': 'true' }), num, label);
     chips[p.key] = { el, num, label, cfg: p };
     summary.append(el);
   }
 
-  const usageLabel = h('span', { class: 'bhq-usage-label', text: 'Неделя' });
+  const usageLabel = h('span', { class: 'bhq-usage-label', text: 'Week' });
   const fill = h('i');
   const meter = h('span', {
-    class: 'bhq-meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Расход лимита',
+    class: 'bhq-slider', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Usage limit',
   }, fill);
-  const pct = h('b', { class: 'bhq-num bhq-usage-pct', text: '—' });
+  const pct = h('b', { class: 'bhq-num bhq-usage-pct' });
   const reset = h('span', { class: 'bhq-reset' });
-  const usage = h('div', { class: 'bhq-usage bhq-glass' }, usageLabel, meter, pct, h('span', { class: 'bhq-sep', 'aria-hidden': 'true' }), reset);
-  const demo = h('span', { class: 'bhq-demo bhq-glass', text: 'DEMO', hidden: true, title: 'Демо-данные, не настоящие боты' });
+  const usage = h('div', { class: 'bhq-usage bhq-surface', hidden: true }, usageLabel, meter, pct, h('span', { class: 'bhq-sep', 'aria-hidden': 'true' }), reset);
+  const demo = h('span', { class: 'bhq-demo bhq-surface', text: 'DEMO', hidden: true, title: 'Demo data, not real bots' });
   const right = h('div', { class: 'bhq-right' }, demo, usage);
 
   root.append(brand, summary, right);
@@ -356,11 +455,14 @@ function buildTopbar(root) {
 
 function buildFloors(root) {
   root.textContent = '';
-  root.classList.add('bhq-glass');
+  root.classList.add('bhq-surface', 'bhq-glow');
   const car = h('div', { class: 'bhq-car', 'aria-hidden': 'true' });
   const shaft = h('div', { class: 'bhq-shaft' }, car);
-  root.append(h('h6', { class: 'bhq-h6', text: 'Этажи' }), shaft);
-  U.fl = { root, shaft, car, carTop: null, carH: null, carShown: false, ready: false };
+  const count = h('b', { class: 'bhq-num' });
+  root.append(
+    h('div', { class: 'bhq-fhead' }, h('span', { text: 'Floors' }), count),
+    h('div', { class: 'bhq-fscroll' }, shaft));
+  U.fl = { root, shaft, car, count, carTop: null, carH: null, carShown: false, ready: false };
   if (typeof ResizeObserver === 'function') {
     U.ro = new ResizeObserver(() => placeCar());
     U.ro.observe(shaft);
@@ -378,90 +480,103 @@ function makeFloor(id) {
   return { btn, num, name, dots, count, dotEls: [] };
 }
 
-/* ------------------------------------------------------------------ build: panel (bot card / team card) */
+/* ------------------------------------------------------------------ build: panel (floor team / bot card) */
 
 function buildPanel(root) {
   root.textContent = '';
 
-  /* floor team card */
+  /* floor team: a team card (one big number) over the list of bots */
   const teamTitle = h('h2', { class: 'bhq-h2' });
-  const teamSub = h('p', { class: 'bhq-sub' });
-  const list = h('div', { class: 'bhq-members', role: 'list' });
-  const teamEmpty = h('p', { class: 'bhq-note', text: 'Пока пусто. Бот появится здесь, когда запишет первый шаг.', hidden: true });
-  const team = h('section', { class: 'bhq-team bhq-glass', 'aria-label': 'Команда этажа' },
-    h('header', { class: 'bhq-team-head' }, teamTitle, teamSub), list, teamEmpty);
+  const teamSub = h('span', { class: 'bhq-tsub' });
+  const big = h('b', { class: 'bhq-num' });
+  const nWait = h('b', { class: 'bhq-num' });
+  const nErr = h('b', { class: 'bhq-num' });
+  const lWait = h('em', { text: 'waiting' });
+  const lErr = h('em', { text: 'errors' });
+  const rowWait = h('span', null, lWait, nWait);
+  const rowErr = h('span', null, lErr, nErr);
+  const head = h('header', { class: 'bhq-thead bhq-surface bhq-glow', 'data-s': 'idle' },
+    h('div', { class: 'bhq-ttop' }, teamTitle, teamSub),
+    h('div', { class: 'bhq-tbot' },
+      h('div', { class: 'bhq-tbig' }, big, h('span', { text: 'working' })),
+      h('div', { class: 'bhq-tcounts' }, rowWait, rowErr)));
+  const list = watchFade(h('div', { class: 'bhq-members', role: 'list' }));
+  const teamEmpty = h('p', { class: 'bhq-note', text: 'Nobody here yet. A bot shows up when it logs its first step.', hidden: true });
+  const team = h('section', { class: 'bhq-team', 'aria-label': 'Floor team' },
+    head, h('div', { class: 'bhq-tcard bhq-surface bhq-glow' }, list, teamEmpty));
 
-  /* bot card */
-  const close = h('button', { class: 'bhq-close', type: 'button', 'aria-label': 'Закрыть карточку бота', title: 'Закрыть (Esc)' }, svg(ICON.close));
+  /* bot card: a hero tinted by the bot's status over a graphite details card */
+  const close = h('button', { class: 'bhq-close', type: 'button', 'aria-label': 'Close bot card', title: 'Close (Esc)' }, svg(ICON.close));
   close.addEventListener('click', () => { if (U.h.onSelectBot) U.h.onSelectBot(null); });
 
-  const av = makeAvatar();
+  const av = makeAva({ cls: 'bhq-ava--lg' });
   const name = h('h2', { class: 'bhq-h2', tabindex: '-1' });
   const where = h('p', { class: 'bhq-sub' });
   const stDot = h('i', { class: 'bhq-dot', 'aria-hidden': 'true' });
   const stTxt = h('span');
   const status = h('span', { class: 'bhq-status' }, stDot, stTxt);
-
   const now = h('p', { class: 'bhq-now' });
-  const taskLabel = h('div', { class: 'bhq-label', text: 'Задача' });
+  const hero = h('div', { class: 'bhq-hero bhq-surface bhq-glow', 'data-s': 'idle' },
+    close,
+    h('div', { class: 'bhq-head' }, av.root, h('div', { class: 'bhq-head-text' }, name, where)),
+    status, now);
+
   const task = h('p', { class: 'bhq-task' });
-  const taskBlock = h('div', { class: 'bhq-block', hidden: true }, taskLabel, task);
+  const taskBlock = h('div', { class: 'bhq-block', hidden: true }, h('div', { class: 'bhq-label', text: 'Task' }), task);
 
   const stat = (unit) => {
     const v = h('b', { class: 'bhq-num' }); const l = h('small', { text: unit || '' });
     return { root: h('div', { class: 'bhq-stat' }, v, l), v, l };
   };
-  const sSteps = stat(), sTasks = stat(), sHours = stat('ч работы');
+  const sSteps = stat(), sTasks = stat(), sHours = stat('h worked');
   const stats = h('div', { class: 'bhq-stats' }, sSteps.root, sTasks.root, sHours.root);
 
   const usageLabel = h('div', { class: 'bhq-label' });
   const fillBar = h('i');
-  const fuel = h('span', { class: 'bhq-meter', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Доля общего расхода' }, fillBar);
-  const share = h('span', { class: 'bhq-num bhq-share' });
+  const fuel = h('span', { class: 'bhq-slider', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-label': 'Share of total usage' }, fillBar);
+  const shareNum = h('b', { class: 'bhq-num' });
+  const share = h('span', { class: 'bhq-share' }, shareNum, ' of all');
+  const useBlock = h('div', { class: 'bhq-useblock' }, usageLabel, h('div', { class: 'bhq-use' }, fuel, share));
 
   const hist = h('ol', { class: 'bhq-steps', role: 'list' });
+  const stepsBlock = h('div', { class: 'bhq-stepsblock' }, h('div', { class: 'bhq-label', text: 'Recent steps' }), hist);
 
-  const body = h('div', { class: 'bhq-card-body' },
-    h('div', { class: 'bhq-head' },
-      h('div', { class: 'bhq-tile bhq-tile--lg' }, av.root),
-      h('div', { class: 'bhq-head-text' }, name, where)),
-    status,
-    h('div', { class: 'bhq-label', text: 'Сейчас' }), now,
-    taskBlock,
-    stats,
-    usageLabel, h('div', { class: 'bhq-use' }, fuel, share),
-    h('div', { class: 'bhq-label', text: 'Последние шаги' }), hist);
+  const body = watchFade(h('div', { class: 'bhq-card-body' }, taskBlock, stats, useBlock, stepsBlock));
 
-  const cta = h('button', { class: 'bhq-cta', type: 'button', text: 'Открыть чат', disabled: true, title: 'Ссылка на чат пока не задана' });
+  const cta = h('button', { class: 'bhq-cta', type: 'button', text: 'Open chat', disabled: true, title: 'No chat link yet' });
   cta.addEventListener('click', () => {
     const b = U.last.state && U.last.state.bots && U.last.state.bots[U.cardBot];
     if (!b || !b.chat_url) return;
-    if (U.h.onOpenChat) U.h.onOpenChat(b.id, b.chat_url);
-    else window.location.href = b.chat_url;
+    openChat(b.id, b.chat_url);
   });
 
-  const card = h('section', { class: 'bhq-card bhq-glass', hidden: true, 'aria-label': 'Карточка бота' },
-    close, body, h('div', { class: 'bhq-card-foot' }, cta));
+  const more = h('div', { class: 'bhq-more bhq-surface bhq-glow bhq-glow--still' }, body, h('div', { class: 'bhq-card-foot' }, cta));
+  const card = h('section', { class: 'bhq-card', hidden: true, 'aria-label': 'Bot card' }, hero, more);
 
   root.append(card, team);
 
   U.panel = {
-    root, team, teamTitle, teamSub, list, teamEmpty,
+    root, team, teamHead: head, teamTitle, teamSub, teamBig: big, nWait, nErr, rowWait, rowErr, lErr, list, teamEmpty,
     card: {
-      root: card, body, av, name, where, status, stDot, stTxt, now, taskBlock, task,
-      sSteps, sTasks, sHours, usageLabel, fuel, fillBar, share, hist, histSig: null, cta,
+      root: card, hero, body, av, name, where, status, stDot, stTxt, now, taskBlock, task,
+      sSteps, sTasks, sHours, usageLabel, useBlock, fuel, fillBar, shareNum, hist, histSig: null, cta, fresh: true,
     },
   };
+}
+
+function openChat(id, url) {
+  if (U.h.onOpenChat) U.h.onOpenChat(id, url);
+  else window.location.href = url;
 }
 
 /* ------------------------------------------------------------------ build: feed + zoom */
 
 function buildFeed(root) {
   root.textContent = '';
-  root.classList.add('bhq-glass');
+  root.classList.add('bhq-surface', 'bhq-glow', 'bhq-glow--still');
   const list = h('ol', { class: 'bhq-frows', role: 'list', 'aria-live': 'off' });
-  const empty = h('p', { class: 'bhq-note', text: 'Событий пока нет.', hidden: true });
-  root.append(h('h6', { class: 'bhq-h6', text: 'Лента' }), list, empty);
+  const empty = h('p', { class: 'bhq-note', text: 'No events yet.', hidden: true });
+  root.append(h('div', { class: 'bhq-fhead' }, h('span', { text: 'Activity' })), list, empty);
   U.feed = { root, list, empty };
 }
 
@@ -471,12 +586,148 @@ function buildZoom() {
     b.addEventListener('click', () => { if (U.h.onZoom) U.h.onZoom(dir); });
     return b;
   };
-  const root = own(h('div', { class: 'bhq-zoom bhq-glass', role: 'group', 'aria-label': 'Масштаб сцены' },
-    mk('z-out', ICON.minus, 'Отдалить', 'out'),
+  const root = own(h('div', { class: 'bhq-zoom bhq-surface', role: 'group', 'aria-label': 'Scene zoom' },
+    mk('z-out', ICON.minus, 'Zoom out', 'out'),
     h('span', { class: 'bhq-sep', 'aria-hidden': 'true' }),
-    mk('z-in', ICON.plus, 'Приблизить', 'in')));
+    mk('z-in', ICON.plus, 'Zoom in', 'in')));
   document.body.append(root);
   U.zoom = { root };
+}
+
+/* ------------------------------------------------------------------ build: dock (waiting on me / finished / routines) */
+
+function dockCard(id, title, opts) {
+  const count = h('span', { class: 'bhq-dcount bhq-num', text: '0' });
+  const inner = watchFade(h('div', { class: 'bhq-dbody-in' }));
+  const toggle = h('button', { class: 'bhq-dtoggle', type: 'button', 'aria-expanded': 'false' },
+    h('span', { class: 'bhq-dtitle', text: title }), count);
+  const head = h('div', { class: 'bhq-dh' + (opts && opts.eye ? ' has-eye' : '') }, toggle);
+  let eye = null;
+  if (opts && opts.eye) {
+    eye = h('button', { class: 'bhq-eye', type: 'button', 'aria-pressed': 'false', 'aria-label': 'Hide this panel for the camera', title: 'Hide for the camera' },
+      svg(ICON.eyeOn), svg(ICON.eyeOff));
+    head.append(eye);
+  }
+  head.append(svg(ICON.chev));
+  const root = h('section', { class: 'bhq-dcard bhq-surface bhq-glow bhq-glow--still', 'aria-label': title, 'data-dock': id },
+    head, h('div', { class: 'bhq-dbody' }, inner));
+  const card = { id, root, toggle, count, inner, eye, open: false, shown: false, rows: 0 };
+  toggle.addEventListener('click', () => setDockOpen(card, !card.shown));
+  return card;
+}
+
+const DOCK_HEAD = 44, DOCK_OPEN_MIN = 140, DOCK_OPEN_EMPTY = 92, DOCK_GAP = 8;
+
+// card.open is what the person asked for; card.shown is what fits. A card that does not fit stays folded until there is room.
+function paintDockCard(card, shown) {
+  card.shown = !!shown;
+  setCls(card.root, 'is-open', card.shown);
+  setAttr(card.toggle, 'aria-expanded', card.shown ? 'true' : 'false');
+  card.inner.inert = !card.shown;
+}
+
+function setDockOpen(card, on, save = true) {
+  card.open = !!on;
+  const d = U.dock;
+  if (card.open) { // most recently opened last
+    d.lru = d.lru.filter((c) => c !== card);
+    d.lru.push(card);
+  }
+  if (save) {
+    const o = {};
+    for (const k of ['waiting', 'finished', 'routines']) o[k] = !!d[k].open;
+    lsSet(LS_DOCK, JSON.stringify(o));
+  }
+  fitDock(d.avail == null ? Infinity : d.avail);
+}
+
+// If the open cards do not all fit between the floors and the feed, the least recently opened ones stay folded.
+function fitDock(avail) {
+  const d = U.dock;
+  d.avail = avail;
+  const cards = [d.waiting, d.finished, d.routines];
+  const live = cards.filter((c) => !c.root.hidden);
+  const on = new Set(live.filter((c) => c.open));
+  const need = () => live.reduce((n, c) => n + (on.has(c) ? (c.rows ? DOCK_OPEN_MIN : DOCK_OPEN_EMPTY) : DOCK_HEAD), 0) + DOCK_GAP * Math.max(0, live.length - 1);
+  while (on.size && need() > avail) {
+    const victim = d.lru.find((c) => on.has(c)) || [...on][0]; // lru is oldest first
+    on.delete(victim);
+  }
+  for (const c of cards) paintDockCard(c, on.has(c));
+}
+
+function setWaitBlur(on, save = true) {
+  const d = U.dock;
+  d.blurred = !!on;
+  setCls(d.waiting.root, 'is-blurred', d.blurred);
+  setAttr(d.waiting.eye, 'aria-pressed', d.blurred ? 'true' : 'false');
+  setAttr(d.waiting.eye, 'aria-label', d.blurred ? 'Show this panel' : 'Hide this panel for the camera');
+  setAttr(d.waiting.eye, 'title', d.blurred ? 'Show' : 'Hide for the camera');
+  d.wlist.inert = d.blurred;
+  if (save) lsSet(LS_BLUR, d.blurred ? '1' : '0');
+}
+
+function buildDock(floors, feed) {
+  const root = own(h('aside', { class: 'bhq-dock', 'aria-label': 'Waiting on me, finished work and routines' }));
+  const waiting = dockCard('waiting', 'Waiting on me', { eye: true });
+  const finished = dockCard('finished', 'Finished');
+  const routines = dockCard('routines', 'Routines');
+
+  const wlist = h('div', { class: 'bhq-wlist' });
+  const wempty = h('p', { class: 'bhq-note', text: 'Nothing is waiting on you.', hidden: true });
+  waiting.inner.append(wlist, wempty);
+
+  const tl = h('ol', { class: 'bhq-tl', role: 'list' });
+  const fempty = h('p', { class: 'bhq-note', text: 'Nothing finished in the last 24 hours.', hidden: true });
+  finished.inner.append(tl, fempty);
+
+  const rl = h('ul', { class: 'bhq-rl', role: 'list' });
+  const rempty = h('p', { class: 'bhq-note', text: 'No routines scheduled.', hidden: true });
+  routines.inner.append(rl, rempty);
+
+  root.append(waiting.root, finished.root, routines.root);
+  document.body.append(root);
+
+  U.dock = {
+    root, waiting, finished, routines, wlist, wempty, tl, fempty, rl, rempty,
+    lru: [], wrows: new Map(), finSig: null, finRefs: [], routSig: null, routRefs: [], copied: new Map(), blurred: false,
+    floors, feed,
+  };
+
+  // open / folded: what the person left last time (the waiting card is open by default)
+  let saved = null;
+  try { saved = JSON.parse(lsGet(LS_DOCK) || 'null'); } catch { saved = null; }
+  for (const k of ['routines', 'finished', 'waiting']) { // waiting last: it is the one that stays open when there is no room for all
+    setDockOpen(U.dock[k], saved && typeof saved[k] === 'boolean' ? saved[k] : k === 'waiting', false);
+  }
+  waiting.eye.addEventListener('click', () => setWaitBlur(!U.dock.blurred));
+  setWaitBlur(lsGet(LS_BLUR) === '1', false);
+
+  // keep the dock between the floors card and the feed, whatever their heights
+  U.onResize = () => layoutDock();
+  addEventListener('resize', U.onResize);
+  if (typeof ResizeObserver === 'function') {
+    U.ro2 = new ResizeObserver(() => layoutDock());
+    if (floors) U.ro2.observe(floors);
+    if (feed) U.ro2.observe(feed);
+  }
+  layoutDock();
+}
+
+function shown(el) { return !!el && el.getClientRects().length > 0; }
+
+function layoutDock() {
+  const d = U && U.dock;
+  if (!d) return;
+  const gutter = 24;
+  // offsetTop/offsetHeight ignore the cards' entrance transform
+  const top = shown(d.floors) ? d.floors.offsetTop + d.floors.offsetHeight + 10 : 96;
+  const bottom = shown(d.feed) ? d.feed.offsetTop - 10 : innerHeight - gutter;
+  const avail = Math.max(0, bottom - top);
+  setPx(d.root, 'top', top);
+  setPx(d.root, 'maxHeight', avail);
+  fitDock(avail);
+  updateFades();
 }
 
 /* ------------------------------------------------------------------ render */
@@ -487,7 +738,7 @@ export function renderUI(state, opts) {
   const o = { currentFloor: opts.currentFloor || null, selectedBot: opts.selectedBot || null };
   U.last = { state, opts: o };
   syncClock(state);
-  if (!U.ready) { // let the first theme paint without a fade, then enable the 1 s day/night transition
+  if (!U.ready) { // let the first paint land without a fade, then mark the page ready (styles.css may use it)
     U.ready = true;
     requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.add('bhq-ready')));
   }
@@ -496,9 +747,11 @@ export function renderUI(state, opts) {
   safe('floors', () => U.fl && renderFloors(state, o));
   safe('panel', () => U.panel && renderPanel(state, o));
   safe('feed', () => U.feed && renderFeed(state));
+  safe('dock', () => U.dock && renderDock(state));
   safe('zoom', () => {
     if (U.zoom && !U.zoom.root.isConnected) document.body.append(U.zoom.root);
   });
+  safe('fades', updateFades);
 }
 
 const reported = new Set();
@@ -519,40 +772,44 @@ function renderTopbar(state) {
     const r = t.chips[p.key];
     const n = p.n(c);
     const label = statusWord(p.s, n);
-    setText(r.num, n);
+    setNum(r.num, n);
     setText(r.label, label);
     setCls(r.el, 'is-zero', n === 0);
     setCls(r.el, 'is-alert', !!p.alert && n > 0);
     if (p.hideZero) setHidden(r.el, n === 0);
     let title = n + ' ' + label;
     if (p.key === 'attention' && c.stuck > 0) {
-      title = c.waiting_user + ' ' + statusWord('waiting_user', c.waiting_user) + ', ' + c.stuck + ' завис?';
+      title = c.waiting_user + ' ' + statusWord('waiting_user', c.waiting_user) + ', ' + c.stuck + ' stuck';
     }
     setAttr(r.el, 'title', title);
   }
 
+  // The usage meter hides when there is no usage report (the bots-only mode has none).
   const u = state.usage || {};
   const pct = Number.isFinite(u.total_used_pct) ? clamp(u.total_used_pct, 0, 100) : null;
-  setText(t.usageLabel, USAGE_TITLE[u.period] || 'Лимит');
-  setWidth(t.fill, pct == null ? '0%' : pct + '%');
-  setText(t.pct, pct == null ? '—' : Math.round(pct) + '%');
-  setAttr(t.meter, 'aria-valuenow', pct == null ? null : Math.round(pct));
-  setAttr(t.meter, 'data-level', pct != null && pct >= 95 ? 'error' : pct != null && pct >= 85 ? 'warn' : null);
+  setHidden(t.usage, pct == null);
+  if (pct != null) {
+    const level = pct >= 95 ? 'error' : pct >= 85 ? 'warn' : null;
+    setText(t.usageLabel, USAGE_TITLE[u.period] || 'Limit');
+    setVar(t.meter, '--p', (pct / 100).toFixed(3));
+    setText(t.pct, Math.round(pct) + '%');
+    setAttr(t.meter, 'aria-valuenow', Math.round(pct));
+    setAttr(t.meter, 'data-level', level);
+    setAttr(t.usage, 'data-level', level);
 
-  let resetText = '';
-  const resetAt = parseTs(u.resets_at);
-  if (resetAt != null) {
-    const left = resetAt - nowMs();
-    resetText = left > 0 ? 'сброс через ' + fmtLeft(left) : 'сброс сейчас';
-  } else if (pct == null) {
-    resetText = 'нет данных';
+    let resetText = '';
+    const resetAt = parseTs(u.resets_at);
+    if (resetAt != null) {
+      const left = resetAt - nowMs();
+      resetText = left > 0 ? 'resets in ' + fmtLeft(left) : 'resetting now';
+    }
+    setText(t.reset, resetText);
+    setHidden(t.reset, !resetText);
+    const sep = t.reset.previousElementSibling;
+    if (sep) setHidden(sep, !resetText);
+    const upd = parseTs(u.updated_at);
+    setAttr(t.usage, 'title', upd != null ? 'Updated at ' + hhmm(upd) : null);
   }
-  setText(t.reset, resetText);
-  setHidden(t.reset, !resetText);
-  const sep = t.reset.previousElementSibling;
-  if (sep) setHidden(sep, !resetText);
-  const upd = parseTs(u.updated_at);
-  setAttr(t.usage, 'title', upd != null ? 'Данные обновлены в ' + hhmm(upd) : null);
 
   setHidden(t.demo, !state.demo);
 }
@@ -577,11 +834,12 @@ function floorBotIds(state, fl) {
 function renderFloors(state, o) {
   const f = U.fl;
   const bots = state.bots || {};
-  // Building order: highest floor first (top of the panel), floor 1 at the bottom.
+  // Building order: highest floor first (top of the card), floor 1 at the bottom.
   const list = (state.floors || []).slice().sort((a, b) => (Number(b.order) || 0) - (Number(a.order) || 0));
   const seen = new Set();
   const activeId = list.some((x) => x.id === o.currentFloor) ? o.currentFloor : null;
   U.activeFloorId = activeId;
+  setText(f.count, list.length);
 
   list.forEach((fl, i) => {
     let r = U.floors.get(fl.id);
@@ -594,13 +852,13 @@ function renderFloors(state, o) {
     setText(r.name, fl.name || fl.id);
     setText(r.count, ids.length);
 
-    // one tiny dot per bot, in desk order
+    // one tiny lit dot per bot, in desk order
     while (r.dotEls.length < ids.length) { const d = h('i', { class: 'bhq-dot' }); r.dotEls.push(d); r.dots.append(d); }
     while (r.dotEls.length > ids.length) r.dotEls.pop().remove();
     ids.forEach((id, k) => setAttr(r.dotEls[k], 'data-s', effStatus(bots[id])));
 
     const summary = countsText(fl.counts);
-    setAttr(r.btn, 'aria-label', 'Этаж ' + number + ', ' + (fl.name || fl.id) + ': ' + ids.length + ' ' + plural(ids.length, 'бот', 'бота', 'ботов') + (summary ? ' (' + summary + ')' : ''));
+    setAttr(r.btn, 'aria-label', 'Floor ' + number + ', ' + (fl.name || fl.id) + ': ' + ids.length + ' ' + plural(ids.length, 'bot', 'bots') + (summary ? ' (' + summary + ')' : ''));
     setAttr(r.btn, 'title', summary || null);
     setAttr(r.btn, 'aria-current', fl.id === activeId ? 'true' : null);
   });
@@ -613,7 +871,7 @@ function renderFloors(state, o) {
   placeCar();
 }
 
-// The black pill is one element that slides between floors (the "elevator car").
+// The lit pill is one element that slides between floors (the "elevator car").
 function placeCar() {
   const f = U && U.fl;
   if (!f) return;
@@ -649,10 +907,9 @@ function renderPanel(state, o) {
   const focusInTeam = p.team.contains(document.activeElement);
   const focusInCard = p.card.root.contains(document.activeElement);
 
-  if (mode !== prevMode) {
+  if (mode !== prevMode) { // the cards inside spring in by themselves when they become visible
     setHidden(p.team, mode === 'card');
     setHidden(p.card.root, mode === 'team');
-    if (prevMode) restartAnim(mode === 'card' ? p.card.root : p.team, 'is-enter');
     U.mode = mode;
   }
 
@@ -660,6 +917,7 @@ function renderPanel(state, o) {
     if (U.cardBot !== bot.id) {
       U.cardBot = bot.id;
       p.card.histSig = null;
+      p.card.fresh = true; // numbers of a new bot appear at once, they do not roll from the previous bot's
       p.card.body.scrollTop = 0;
       if (prevMode === 'card') restartAnim(p.card.root, 'is-enter');
     }
@@ -675,17 +933,16 @@ function renderPanel(state, o) {
   }
 }
 
-/* ---- floor team card */
+/* ---- floor team */
 
 function makeCell(id) {
-  const av = makeAvatar();
-  const dot = h('i', { class: 'bhq-dot', 'aria-hidden': 'true' });
+  const av = makeAva();
   const name = h('b', { class: 'bhq-mname' });
   const step = h('span', { class: 'bhq-mstep' });
   const btn = h('button', { class: 'bhq-member', type: 'button', 'data-id': id, role: 'listitem' },
-    h('span', { class: 'bhq-tile' }, av.root), h('span', { class: 'bhq-mtext' }, name, step), dot);
+    av.root, h('span', { class: 'bhq-mtext' }, name, step));
   btn.addEventListener('click', () => { if (U.h.onSelectBot) U.h.onSelectBot(id); });
-  return { btn, av, dot, name, step };
+  return { btn, av, name, step };
 }
 
 function renderTeam(state, floor, o) {
@@ -694,24 +951,34 @@ function renderTeam(state, floor, o) {
   let ids = floor ? floorBotIds(state, floor) : [];
   ids = ids.filter((id) => bots[id]);
 
+  let animate = true;
   if (U.teamFloor !== (floor ? floor.id : null)) {
     U.teamFloor = floor ? floor.id : null;
     p.list.scrollTop = 0;
+    animate = !U.teamReady; // a new floor shows its own numbers at once
     if (U.teamReady) restartAnim(p.list, 'is-enter');
   }
   U.teamReady = true;
 
-  setText(p.teamTitle, floor ? floor.name || floor.id : 'Этаж не выбран');
-  if (floor) {
-    const n = ids.length;
-    const working = ids.filter((id) => effStatus(bots[id]) === 'working').length;
-    let sub = n + ' ' + plural(n, 'бот', 'бота', 'ботов');
-    if (working) sub += ' · ' + working + ' ' + statusWord('working', working);
-    setText(p.teamSub, sub);
-  } else {
-    setText(p.teamSub, 'Выбери этаж слева');
+  setText(p.teamTitle, floor ? floor.name || floor.id : 'No floor selected');
+  const n = ids.length;
+  let working = 0, waiting = 0, errors = 0;
+  for (const id of ids) {
+    const s = effStatus(bots[id]);
+    if (s === 'working') working++;
+    else if (s === 'waiting_user' || s === 'stuck') waiting++;
+    else if (s === 'error') errors++;
   }
-  setHidden(p.teamEmpty, ids.length > 0 || !floor);
+  setText(p.teamSub, floor ? n + ' ' + plural(n, 'bot', 'bots') : 'Pick a floor on the left');
+  // green while anyone works, graphite at rest (the wallpaper's team card)
+  setAttr(p.teamHead, 'data-s', working > 0 ? 'working' : 'idle');
+  setNum(p.teamBig, working, animate);
+  setNum(p.nWait, waiting, animate);
+  setNum(p.nErr, errors, animate);
+  setText(p.lErr, errors === 1 ? 'error' : 'errors');
+  setCls(p.rowWait, 'is-zero', !waiting);
+  setCls(p.rowErr, 'is-zero', !errors);
+  setHidden(p.teamEmpty, n > 0 || !floor);
 
   const seen = new Set(ids);
   for (const [id, c] of U.cells) {
@@ -722,10 +989,10 @@ function renderTeam(state, floor, o) {
     if (!c) { c = makeCell(id); U.cells.set(id, c); }
     const bot = bots[id];
     const s = effStatus(bot);
-    setAvatar(c.av, bot);
+    setAvatar(c.av, bot, s);
     setText(c.name, bot.name || id);
     setText(c.step, bot.step || statusLabel(s));
-    setAttr(c.dot, 'data-s', s);
+    setAttr(c.btn, 'data-s', s);
     setAttr(c.btn, 'aria-label', (bot.name || id) + ', ' + statusLabel(s));
     setAttr(c.btn, 'title', (bot.name || id) + ': ' + statusLabel(s) + (bot.step ? '. ' + bot.step : ''));
     return c.btn;
@@ -745,21 +1012,23 @@ function renderCard(state, bot) {
   const c = U.panel.card;
   const s = effStatus(bot);
   const now = nowMs();
+  const animate = !c.fresh;
 
-  setAvatar(c.av, bot);
+  setAttr(c.hero, 'data-s', s);
+  setAvatar(c.av, bot, s);
   setText(c.name, bot.name || bot.id);
 
   const fl = (state.floors || []).find((x) => x.id === bot.floor);
   const where = (fl && (fl.name || fl.id)) || bot.group || '';
-  const desk = Number.isFinite(Number(bot.desk)) && bot.desk != null ? ' · стол ' + Number(bot.desk) : '';
+  const desk = Number.isFinite(Number(bot.desk)) && bot.desk != null ? ' · desk ' + Number(bot.desk) : '';
   setText(c.where, where + desk);
 
-  setAttr(c.status, 'data-s', s);
+  setAttr(c.stDot, 'data-s', s);
   const since = parseTs(bot.since);
-  const age = since == null ? '' : ' · ' + (now - since < 60000 ? 'только что' : fmtDur(now - since));
+  const age = since == null ? '' : ' · ' + (now - since < 60000 ? 'just now' : fmtDur(now - since));
   setText(c.stTxt, (CHIP[s] || statusLabel(s)) + age);
 
-  setText(c.now, bot.step || 'Нет данных о текущем шаге');
+  setText(c.now, bot.step || 'No data on the current step');
 
   // Task: hide when empty, id-like ("tsk-1643") or a plain copy of the current step.
   const task = typeof bot.task === 'string' ? bot.task.trim() : '';
@@ -770,19 +1039,22 @@ function renderCard(state, bot) {
   // today
   const td = bot.today || {};
   const ev = Number(td.events) || 0, tk = Number(td.tasks_done) || 0;
-  setText(c.sSteps.v, ev);
-  setText(c.sSteps.l, plural(ev, 'шаг', 'шага', 'шагов'));
-  setText(c.sTasks.v, tk);
-  setText(c.sTasks.l, plural(tk, 'задача', 'задачи', 'задач'));
+  setNum(c.sSteps.v, ev, animate);
+  setText(c.sSteps.l, plural(ev, 'step', 'steps'));
+  setNum(c.sTasks.v, tk, animate);
+  setText(c.sTasks.l, plural(tk, 'task', 'tasks'));
   setText(c.sHours.v, fmtHours(td.working_min));
 
-  // usage share
+  // usage share (hidden when there is no figure)
   const period = state.usage && state.usage.period;
-  setText(c.usageLabel, USAGE_SPENT[period] || 'Расход');
+  setText(c.usageLabel, USAGE_SPENT[period] || 'Usage');
   const share = Number.isFinite(bot.usage_share) ? clamp(bot.usage_share, 0, 1) : null;
-  setWidth(c.fillBar, share == null ? '0%' : (share > 0 ? Math.max(share * 100, 2) : 0) + '%');
-  setAttr(c.fuel, 'aria-valuenow', share == null ? null : Math.round(share * 100));
-  setText(c.share, share == null ? 'нет данных' : Math.round(share * 100) + '% от всех');
+  setHidden(c.useBlock, share == null);
+  if (share != null) {
+    setVar(c.fuel, '--p', (share > 0 ? Math.max(share, 0.02) : 0).toFixed(3));
+    setAttr(c.fuel, 'aria-valuenow', Math.round(share * 100));
+    setText(c.shareNum, Math.round(share * 100) + '%');
+  }
 
   // last steps (rebuilt only when they change); the newest entry is usually the current step, already shown above
   let hist = (bot.history || []).slice(0, STEPS_SHOWN + 1);
@@ -792,14 +1064,15 @@ function renderCard(state, bot) {
   if (sig !== c.histSig) {
     c.histSig = sig;
     c.hist.textContent = '';
-    if (!hist.length) c.hist.append(h('li', { class: 'bhq-step-empty', text: 'Шагов пока нет.' }));
+    if (!hist.length) c.hist.append(h('li', { class: 'bhq-step-empty', text: 'No steps yet.' }));
     for (const x of hist) c.hist.append(histRow(x));
   }
 
   // chat button
   const has = !!bot.chat_url;
   if (c.cta.disabled === has) c.cta.disabled = !has;
-  setAttr(c.cta, 'title', has ? null : 'Ссылка на чат пока не задана');
+  setAttr(c.cta, 'title', has ? null : 'No chat link yet');
+  c.fresh = false;
 }
 
 /* ---- live feed (last 4 events of the whole building, newest on top) */
@@ -807,8 +1080,10 @@ function renderCard(state, bot) {
 function makeRow(ev, state) {
   const bot = state.bots && state.bots[ev.bot];
   const name = ev.name || (bot && bot.name) || ev.bot || '';
-  return h('li', { class: 'bhq-frow', 'data-s': ev.status || 'idle' },
+  const s = ev.status || 'idle';
+  return h('li', { class: 'bhq-frow', 'data-s': s },
     h('time', { class: 'bhq-num', text: hhmm(parseTs(ev.t)), datetime: ev.t || '' }),
+    h('i', { class: 'bhq-dot', 'data-s': s, 'aria-hidden': 'true' }),
     h('span', { class: 'bhq-ftxt' }, h('b', { text: name }), ' ' + (ev.step || statusLabel(ev.status))));
 }
 
@@ -862,4 +1137,193 @@ function renderFeed(state) {
 
   setHidden(fd.empty, items.length > 0);
   U.feedFirst = false;
+}
+
+/* ---- dock */
+
+function renderDock(state) {
+  renderWaiting(state);
+  renderFinished(state);
+  renderRoutines(state);
+  layoutDock(); // after the cards know whether they are shown
+}
+
+function botFor(state, id, fallbackName) {
+  const b = state.bots && state.bots[id];
+  return b || { id, name: fallbackName || id, avatar: id };
+}
+
+/* Waiting on me: every bot that is waiting for the user or in error, newest first. */
+
+function makeWaitRow(id) {
+  const av = makeAva();
+  const name = h('button', { class: 'bhq-wname', type: 'button' });
+  const btn = h('button', { class: 'bhq-wbtn', type: 'button', text: 'Open chat', hidden: true });
+  const st = h('b');
+  const step = h('span');
+  const text = h('p', { class: 'bhq-wtext' }, st, step);
+  const row = h('div', { class: 'bhq-wrow', 'data-id': id },
+    av.root,
+    h('div', { class: 'bhq-wmain' }, h('div', { class: 'bhq-wtop' }, name, btn), text));
+  const select = () => { if (U.h.onSelectBot) U.h.onSelectBot(id); };
+  name.addEventListener('click', select);
+  row.addEventListener('click', (e) => { if (!e.target.closest('button')) select(); });
+  btn.addEventListener('click', () => {
+    const b = U.last.state && U.last.state.bots && U.last.state.bots[id];
+    if (b && b.chat_url) openChat(id, b.chat_url);
+  });
+  return { row, av, name, btn, st, step };
+}
+
+function renderWaiting(state) {
+  const d = U.dock;
+  const bots = state.bots || {};
+  const ids = Object.keys(bots)
+    .filter((id) => { const s = effStatus(bots[id]); return s === 'waiting_user' || s === 'error'; })
+    .sort((a, b) => (parseTs(bots[b].last_event) || 0) - (parseTs(bots[a].last_event) || 0)
+      || String(bots[a].name).localeCompare(String(bots[b].name)));
+
+  const errors = ids.filter((id) => effStatus(bots[id]) === 'error').length;
+  setText(d.waiting.count, ids.length);
+  d.waiting.rows = ids.length;
+  setCls(d.waiting.root, 'has-rows', ids.length > 0);
+  setAttr(d.waiting.count, 'data-s', errors ? 'error' : ids.length ? 'waiting_user' : null);
+
+  const seen = new Set(ids);
+  for (const [id, r] of d.wrows) {
+    if (!seen.has(id)) { r.row.remove(); d.wrows.delete(id); }
+  }
+  const els = ids.map((id) => {
+    let r = d.wrows.get(id);
+    if (!r) { r = makeWaitRow(id); d.wrows.set(id, r); }
+    const bot = bots[id];
+    const s = effStatus(bot);
+    setAttr(r.row, 'data-s', s);
+    setAvatar(r.av, bot, s);
+    setText(r.name, bot.name || id);
+    setText(r.st, CHIP[s] || statusLabel(s));
+    setText(r.step, bot.step ? ' · ' + bot.step : '');
+    setHidden(r.btn, !bot.chat_url);
+    return r.row;
+  });
+  reconcile(d.wlist, els, 0);
+  setHidden(d.wempty, ids.length > 0);
+}
+
+/* Finished: the `done` lines of the last 24 hours, newest first, on a timeline. Hidden when the server sends none. */
+
+function renderFinished(state) {
+  const d = U.dock;
+  const has = Array.isArray(state.finished);
+  setHidden(d.finished.root, !has);
+  if (!has) return;
+
+  const now = nowMs();
+  const items = state.finished
+    .map((e) => ({ e, t: parseTs(e && e.t) }))
+    .filter((x) => x.e && (x.t == null || now - x.t <= DAY_MS))
+    .sort((a, b) => (b.t || 0) - (a.t || 0))
+    .slice(0, FINISHED_MAX);
+  setText(d.finished.count, items.length);
+  d.finished.rows = items.length;
+  setCls(d.finished.root, 'has-rows', items.length > 0);
+  setHidden(d.fempty, items.length > 0);
+
+  const sig = items.map((x) => x.t + '|' + x.e.bot + '|' + x.e.step).join('\n');
+  if (sig !== d.finSig) {
+    d.finSig = sig;
+    d.tl.textContent = '';
+    d.finRefs = items.map((x) => {
+      const bot = botFor(state, x.e.bot, x.e.name);
+      const av = makeAva({ orb: false });
+      setAvatar(av, bot, null);
+      const time = h('span', { class: 'bhq-tl-time bhq-num' });
+      const li = h('li', { class: 'bhq-tl-row' },
+        av.root,
+        h('div', { class: 'bhq-tl-main' },
+          h('div', { class: 'bhq-tl-top' }, h('b', { class: 'bhq-tl-name', text: x.e.name || bot.name || x.e.bot || '' }), time),
+          h('div', { class: 'bhq-tl-step', text: x.e.step || 'done', title: x.e.step || '' })));
+      d.tl.append(li);
+      return { time, t: x.t };
+    });
+  }
+  for (const r of d.finRefs) setText(r.time, r.t == null ? '' : relAgo(r.t));
+}
+
+/* Routines: sorted by next run; "Turn off" copies `pause routine <name>` and opens the owner's chat. */
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) { await navigator.clipboard.writeText(text); return true; }
+  } catch { /* fall through to the old way */ }
+  try {
+    const ta = h('textarea', { 'aria-hidden': 'true', tabindex: '-1', readonly: true });
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;pointer-events:none';
+    document.body.append(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return !!ok;
+  } catch { return false; }
+}
+
+async function turnOffRoutine(r, ref) {
+  const d = U.dock;
+  const cmd = 'pause routine ' + r.routine;
+  const ok = await copyText(cmd);
+  setText(ref.noteText, ok ? 'Copied — paste it in the chat' : 'Could not copy — send: ' + cmd);
+  const key = ref.key;
+  clearTimeout(d.copied.get(key));
+  ref.li.classList.add('is-copied');
+  d.copied.set(key, setTimeout(() => { d.copied.delete(key); ref.li.classList.remove('is-copied'); }, 4200));
+  const bot = U.last.state && U.last.state.bots && U.last.state.bots[r.bot];
+  if (bot && bot.chat_url) openChat(bot.id, bot.chat_url);
+}
+
+function renderRoutines(state) {
+  const d = U.dock;
+  const has = Array.isArray(state.routines);
+  setHidden(d.routines.root, !has);
+  if (!has) return;
+
+  const items = state.routines.filter((r) => r && r.routine).slice()
+    .sort((a, b) => (parseTs(a.next_run) ?? Infinity) - (parseTs(b.next_run) ?? Infinity));
+  setText(d.routines.count, items.length);
+  d.routines.rows = items.length;
+  setCls(d.routines.root, 'has-rows', items.length > 0);
+  setHidden(d.rempty, items.length > 0);
+
+  const sig = items.map((r) => r.bot + '|' + r.routine + '|' + r.schedule + '|' + r.next_run + '|' + r.name).join('\n');
+  if (sig !== d.routSig) {
+    d.routSig = sig;
+    d.rl.textContent = '';
+    d.routRefs = items.map((r) => {
+      const bot = botFor(state, r.bot, r.name);
+      const owner = r.name || bot.name || r.bot || '';
+      const key = r.bot + '|' + r.routine;
+      const av = makeAva({ orb: false });
+      setAvatar(av, bot, null);
+      const next = h('span', { class: 'bhq-rnext bhq-num' });
+      const noteText = h('span');
+      const btn = h('button', { class: 'bhq-roff', type: 'button', text: 'Turn off', title: 'Copies "pause routine ' + r.routine + '" and opens the chat' });
+      const li = h('li', { class: 'bhq-rrow' + (d.copied.has(key) ? ' is-copied' : '') },
+        av.root,
+        h('div', { class: 'bhq-rmain' },
+          h('div', { class: 'bhq-rtop' }, h('b', { class: 'bhq-rname', text: r.routine, title: r.routine }), next),
+          h('div', { class: 'bhq-rbot' },
+            h('span', { class: 'bhq-rmeta', text: owner + (r.schedule ? ' · ' + r.schedule : ''), title: owner + (r.schedule ? ' · ' + r.schedule : '') }),
+            h('span', { class: 'bhq-rnote', role: 'status' }, svg(ICON.check), noteText),
+            btn)));
+      const ref = { li, next, noteText, key, t: parseTs(r.next_run) };
+      setText(noteText, 'Copied — paste it in the chat');
+      btn.addEventListener('click', () => turnOffRoutine(r, ref));
+      d.rl.append(li);
+      return ref;
+    });
+  }
+  for (const ref of d.routRefs) {
+    setText(ref.next, ref.t == null ? 'no date' : relIn(ref.t));
+    setAttr(ref.next, 'title', ref.t == null ? null : fullLocal(ref.t));
+  }
 }

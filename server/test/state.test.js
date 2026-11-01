@@ -115,10 +115,10 @@ test('floors: group -> floor, demo ids and order, free desks', () => {
   const st = store.snapshot();
   assert.deepEqual(st.floors.map((f) => f.id), ['coordination', 'x-content', 'publishing', 'finance', 'novyy-otdel', 'general']);
   assert.deepEqual(st.floors.map((f) => f.order), [1, 2, 3, 4, 5, 6]);
-  assert.equal(st.floors[1].name, 'X-контент');
+  assert.equal(st.floors[1].name, 'X content');
   assert.equal(st.floors[1].free_desks, 19);
   assert.equal(st.bots.loner.floor, 'general');
-  assert.equal(st.floors.at(-1).name, 'Общий этаж');
+  assert.equal(st.floors.at(-1).name, 'Main floor');
   assert.equal(st.bots['finance-team'].floor, 'finance');
 });
 

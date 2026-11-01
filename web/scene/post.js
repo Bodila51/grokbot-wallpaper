@@ -1,11 +1,12 @@
-// Tilt-shift "miniature" post effect: sharp band around the active floor, soft blur toward the top and bottom
-// edges. EffectComposer (MSAA, half-float, alpha kept so the page background shows through) + two separable
-// blur passes + OutputPass (tone mapping + sRGB). `?tiltshift=0` disables it and the scene renders directly.
+// Post chain: the scene (MSAA, half-float, alpha kept) -> tilt-shift "miniature" blur (sharp band around the active
+// floor, soft toward the top and bottom edges; `?tiltshift=0` leaves it out) -> OutputPass (tone mapping + sRGB) ->
+// the studio pass (studio.js: white backdrop + the building's soft shadow aura), which is what reaches the screen.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { StudioPass } from './studio.js';
 
 const TiltShiftShader = {
   name: 'BotHQTiltShift',
@@ -56,9 +57,12 @@ export function createPost(renderer, scene, camera) {
   composer.addPass(new RenderPass(scene, camera));
   const h = new ShaderPass(TiltShiftShader);
   const v = new ShaderPass(TiltShiftShader);      // ShaderPass clones the uniforms, so each pass owns its own
+  h.enabled = v.enabled = tiltShiftEnabled();
   composer.addPass(h);
   composer.addPass(v);
   composer.addPass(new OutputPass());
+  const studio = new StudioPass(scene, camera);
+  composer.addPass(studio);
 
   const api = {
     composer,

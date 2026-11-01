@@ -245,7 +245,26 @@ const THUMBS = new Set(['grok-bot', 'jevopus', 'x-writer', 'banner-visuals', 'an
   'ideas-sparring', 'bookmarks-brain', 'codila-x-researcher', 'trendy-x', 'substack', 'x-ads-manager', 'warren-buffett', 'finance-team']);
 function face3d(bot, look) {
   const id = bot.avatar || bot.id;
-  return THUMBS.has(id) ? `<img src="../assets/blobs/thumbs/${id}.png" alt="" draggable="false">` : avatar(bot, look);
+  return THUMBS.has(id) ? `<img src="../assets/blobs/thumbs/${id}.png" alt="" draggable="false">` : libFace(bot, look);
+}
+// Any other bot: the pre-rendered 3D library (assets/blobs/lib, made by build_blobs.py --lib) = its shape in the
+// nearest of 12 colours; the flat avatar() takes over if the PNG fails to load.
+function libFace(bot, look) {
+  const PAL = ['FB2B3E', 'FD690F', 'F6A317', 'A8D52F', '1FAE63', '13B7A2', '1E86FC', '7B5CF2', 'F93498', 'A06B39', '0C0C0E', 'F3E7DB']; // = LIB_COLORS
+  const shape = SHAPES.includes(look?.shape) ? look.shape : SHAPES[hash(bot.id) % SHAPES.length];
+  const m = /^#([0-9a-f]{6})$/i.exec(look?.color || bot.color || '');
+  const rgb = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+  let hex = PAL[hash(bot.id + 'c') % PAL.length];
+  if (m) {                                                           // nearest by the "redmean" weighted RGB distance
+    const [r, g, b] = rgb(m[1]);
+    let best = Infinity;
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 28) { hex = PAL[(r + g + b) / 3 < 128 ? 10 : 11]; best = 0; }   // greys: near-black or near-white, never brown
+    for (const p of PAL) {
+      const [pr, pg, pb] = rgb(p), rm = (r + pr) / 2, d = (2 + rm / 256) * (r - pr) ** 2 + 4 * (g - pg) ** 2 + (3 - rm / 256) * (b - pb) ** 2;
+      if (d < best) { best = d; hex = p; }
+    }
+  }
+  return `<img src="../assets/blobs/lib/${shape}-${hex}.png" alt="" draggable="false" data-fb="${esc(avatar(bot, look))}" onerror="this.outerHTML=this.dataset.fb">`;
 }
 function avatar(bot, look) {
   const shape = look?.shape || SHAPES[hash(bot.id) % SHAPES.length];
@@ -569,16 +588,24 @@ window.livelyPropertyListener = (name, value) => {
     const next = String(value ?? '').trim();
     if (next === (FEED || '')) return;
     try { if (next) localStorage.setItem('gbw.feed', next); else localStorage.removeItem('gbw.feed'); } catch { /* not remembered */ }
-    location.replace(location.pathname + (next ? `?feed=${encodeURIComponent(next)}` : ''));
+    location.replace(location.pathname + (next ? `#${encodeURIComponent(next)}` : ''));   // in the hash: never sent to a server
+    if (next) location.reload();                         // a hash change alone doesn't reload the page
   }
 };
 
 // ---------- the user's own bots: their channel on ntfy.sh ----------
-// A link with ?feed=<channel> (remembered after that) connects the wallpaper to the user's bots. Every bot posts one
-// line per status change, {"bot":"…","status":"…","step":"…"}, to https://ntfy.sh/<channel> with plain curl; nothing
-// else runs on the bots' box. The page reads the channel's last 12 hours, then listens live.
-const FEED = params.get('feed') || (() => { try { return localStorage.getItem('gbw.feed'); } catch { return null; } })();
-if (params.get('feed')) { try { localStorage.setItem('gbw.feed', FEED); } catch { /* private mode: not remembered */ } }
+// A link with #<channel> (or the older ?feed=<channel>), remembered after that, connects the wallpaper to the user's
+// bots; the hash never reaches GitHub Pages, and &ntfy=<https server> picks a self-hosted ntfy. Every bot posts one
+// line per status change, {"bot":"…","status":"…","step":"…"}, plus roster, looks and usage lines (README), to the
+// channel with plain curl; nothing else runs on the bots' box. The page reads the last 12 hours, then listens live.
+const stored = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
+const HASH = /^#([A-Za-z0-9_-]{6,64})(?:&ntfy=([^&]+))?$/.exec(location.hash);
+function httpsServer(raw) {
+  try { const u = new URL(raw); return u.protocol === 'https:' || u.hostname === 'localhost' ? (u.origin + u.pathname).replace(/\/+$/, '') : null; } catch { return null; }
+}
+const FEED = HASH?.[1] || params.get('feed') || stored('gbw.feed');
+const NTFY = httpsServer(HASH?.[2] ? decodeURIComponent(HASH[2]) : params.get('ntfy') || '') || stored('gbw.ntfy') || 'https://ntfy.sh';
+if (HASH || params.get('feed')) { try { localStorage.setItem('gbw.feed', FEED); localStorage.setItem('gbw.ntfy', NTFY); } catch { /* private mode: not remembered */ } }
 const CYR = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o',
   п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e',
@@ -597,10 +624,20 @@ function botId(name) {
     .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48).replace(/-+$/g, '');
   return SLUG_ALIASES[s] || s || `bot-${hash(String(name)).toString(36)}`;
 }
-function applyLine(text, time) {                         // one bot's status line (or the roster); false if neither
+function applyLine(text, time) {                         // a status, roster, looks or usage line; false if none
+  if (typeof text !== 'string' || text.length > 4096) return false;
   let ev;
   try { ev = JSON.parse(text); } catch { return false; }
   const at = new Date((Number(time) || Date.now() / 1000) * 1000).toISOString();
+  if (ev?.looks && typeof ev.looks === 'object' && !Array.isArray(ev.looks)) {   // how each bot looks: its avatar
+    for (const [name, look] of Object.entries(ev.looks).slice(0, 400)) if (look && typeof look === 'object') looks[botId(name)] = look;
+    crew = '';                                           // rebuild the avatars
+    return true;
+  }
+  if (ev?.type === 'usage') {                            // the weekly limit: the slider shows only once one arrives
+    if (Number.isFinite(Number(ev.total_used_pct))) state.usage = { total_used_pct: Number(ev.total_used_pct) };
+    return true;
+  }
   if (Array.isArray(ev?.roster)) {                       // {"roster":[names]}: every bot shows up, resting until it posts
     for (const raw of ev.roster.slice(0, 200)) {
       const name = String(raw ?? '').trim().slice(0, 60), id = name && botId(name);
@@ -620,7 +657,7 @@ function applyLine(text, time) {                         // one bot's status lin
 }
 // the channel keeps 12 hours, the wallpaper remembers every bot it has seen: a quiet bot stays on screen, resting
 const MEMORY_KEY = `gbw.bots.${FEED}`;
-function remember() { try { localStorage.setItem(MEMORY_KEY, JSON.stringify(state.bots)); } catch { /* not remembered */ } }
+function remember() { try { localStorage.setItem(MEMORY_KEY, JSON.stringify({ bots: state.bots, looks, usage: state.usage })); } catch { /* not remembered */ } }
 function settleQuiet() {                                 // a finished task rests after 30 min, a silent one after 3 h
   const now = Date.now();
   let changed = false;
@@ -633,8 +670,10 @@ function settleQuiet() {                                 // a finished task rest
 async function connectFeed() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; } catch { /* nothing remembered yet */ }
-  state = { bots: saved, usage: null };
-  const base = `https://ntfy.sh/${encodeURIComponent(FEED)}`;
+  if (!saved.bots) saved = { bots: saved };              // the first version remembered the bots alone
+  looks = saved.looks || {};
+  state = { bots: saved.bots, usage: saved.usage ?? null };
+  const base = `${NTFY}/${encodeURIComponent(FEED)}`;
   try {
     const text = await (await fetch(`${base}/json?poll=1&since=12h`, { cache: 'no-store' })).text();
     for (const line of text.split('\n')) {
@@ -677,5 +716,8 @@ async function startDemo() {
     render(state);
   }, 3500);
 }
-fetch('../data/demo-looks.json').then((r) => (r.ok ? r.json() : {})).then((j) => { looks = j.looks || j || {}; if (state) { crew = ''; needs.innerHTML = ''; render(state); } }).catch(() => {});
-if (FEED) connectFeed(); else poll();
+if (FEED) connectFeed();
+else {
+  fetch('../data/demo-looks.json').then((r) => (r.ok ? r.json() : {})).then((j) => { looks = j.looks || j || {}; if (state) { crew = ''; needs.innerHTML = ''; render(state); } }).catch(() => {});
+  poll();
+}

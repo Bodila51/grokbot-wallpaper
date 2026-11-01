@@ -226,7 +226,7 @@ function cell(parent, { title, sub, color, make, size = 150, ppm = 90 }) {
 }
 
 function loadGLB(id) {
-  return new Promise((res) => new GLTFLoader().load(`/assets/blobs/${id}.glb`, (g) => res(g.scene), undefined, () => res(null)));
+  return new Promise((res) => new GLTFLoader().load(`../../assets/blobs/${id}.glb`, (g) => res(g.scene), undefined, () => res(null)));
 }
 const glbCache = new Map();
 const glb = (id) => { if (!glbCache.has(id)) glbCache.set(id, loadGLB(id)); return glbCache.get(id).then((s) => s && s.clone(true)); };
@@ -358,7 +358,7 @@ document.getElementById('seed').value = state.seed;
 document.getElementById('seed').addEventListener('change', (e) => { state.seed = e.target.value || 'demo'; renderAll(); });
 for (const x of document.querySelectorAll('#views button')) x.setAttribute('aria-pressed', String(x.dataset.view === state.view));
 
-try { demoLooks = await (await fetch('/data/demo-looks.json')).json(); } catch { demoLooks = {}; }
+try { demoLooks = await (await fetch('../data/demo-looks.json')).json(); } catch { demoLooks = {}; }
 selftest();
 await renderAll();
 </script>

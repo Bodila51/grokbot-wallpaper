@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,99 +7,128 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400..700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../styles.css">
   <link rel="stylesheet" href="./ui.css">
   <style>
     /*
-     * The UI over a static render (mockups/diorama/scene.png) instead of the 3D canvas.
-     * Test URLs:  ?theme=day|golden|dusk|night|dawn   ?sel=<bot id>|none   ?floor=<floor id>   ?live=0 (freeze data)   ?shot (hide the dev bar)
+     * The UI over a stand-in for the 3D office (the real scene is edited elsewhere), with a fake state injected.
+     * Test URLs:
+     *   ?bg=white (default: a white page, soft dark aura) | scene (the real office, wallpaper mode, in an iframe) | dark
+     *   ?sel=<bot id>|none   ?floor=<floor id>   ?live=0 (freeze data)   ?shot (hide the dev bar)
+     *   ?open=all|none|waiting,finished,routines   (dock cards)   ?blur=1 (the eye on)
+     *   ?fin=0 / ?routines=0 (drop those fields, as in the local-server mode; =empty gives empty lists)   ?calm=1 (nobody waits)   ?usage=0 (no usage report, as in bots-only mode)
      */
+    html, body { background: #fff; }
     #scene { background: none; cursor: default; }
-    #scene .plate {
-      position: absolute; inset: 0; background: url("../../mockups/diorama/scene.png") 50% 50% / cover no-repeat;
-      -webkit-mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, .35) 82%, transparent 97%);
-              mask-image: linear-gradient(to bottom, #000 62%, rgba(0, 0, 0, .35) 82%, transparent 97%);
+    #scene .plate { position: absolute; inset: 0; }
+    body[data-bg="white"] #scene .plate {
+      background:
+        radial-gradient(34% 40% at 50% 54%, rgba(20, 24, 40, .16), rgba(20, 24, 40, .06) 55%, transparent 100%),
+        #fff;
     }
-    /* crude night for the still image: navy multiply driven by --night (the real scene does this itself) */
-    #scene .plate::after {
-      content: ""; position: absolute; inset: 0; background: #1A2547; mix-blend-mode: multiply;
-      opacity: calc(var(--night) * .82);
-    }
+    body[data-bg="dark"] #scene .plate { background: radial-gradient(70% 70% at 42% 38%, #1B2240, #10162B 55%, #080B18); }
+    #scene iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
     .dev {
       position: fixed; z-index: 30; left: 50%; top: 76px; transform: translateX(-50%) translateX(-70px);
       display: flex; gap: 6px; align-items: center; padding: 4px; border-radius: 999px;
-      font: 500 12px/1 "Inter", system-ui, sans-serif; color: var(--muted);
+      font: 700 12px/1 "Nunito", system-ui, sans-serif; color: #B4B4BA;
     }
-    .dev button {
-      font: inherit; color: var(--ink); background: none; border: 0; height: 28px; padding: 0 11px; border-radius: 999px; cursor: pointer;
-    }
-    .dev button:hover { background: var(--row-hover); }
-    .dev button[aria-pressed="true"] { background: var(--btn-bg); color: var(--btn-fg); }
-    .dev .sep { width: 1px; height: 14px; background: var(--hair); }
+    .dev button { font: inherit; color: #F2F2F7; background: none; border: 0; height: 28px; padding: 0 11px; border-radius: 999px; cursor: pointer; }
+    .dev button:hover { background: rgba(255, 255, 255, .1); }
+    .dev button[aria-pressed="true"] { background: #F2F2F7; color: #232327; }
+    .dev .sep { width: 1px; height: 14px; background: rgba(255, 255, 255, .14); }
     .dev label { display: inline-flex; gap: 6px; align-items: center; padding: 0 8px; cursor: pointer; }
     .dev code { font: 11px ui-monospace, Menlo, Consolas, monospace; padding: 0 8px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     body.shot .dev { display: none; }
   </style>
 </head>
 <body>
-  <main id="scene" aria-label="Офис"><div class="plate"></div></main>
+  <main id="scene" aria-label="Office"><div class="plate"></div></main>
   <header id="topbar"></header>
-  <nav id="floors" aria-label="Этажи"></nav>
-  <aside id="panel" aria-label="Карточка бота и команда этажа"></aside>
-  <section id="feed" aria-label="Лента событий"></section>
+  <nav id="floors"></nav>
+  <aside id="panel"></aside>
+  <section id="feed"></section>
 
-  <div class="dev bhq-glass" role="toolbar" aria-label="Стенд">
-    <button type="button" data-theme="day">День</button>
-    <button type="button" data-theme="dusk">Сумерки</button>
-    <button type="button" data-theme="night">Ночь</button>
+  <div class="dev bhq-surface" role="toolbar" aria-label="Test bench">
+    <button type="button" data-sel="none">Team</button>
+    <button type="button" data-sel="x-writer">Bot</button>
     <span class="sep"></span>
-    <button type="button" data-sel="none">Команда</button>
-    <button type="button" data-sel="codila-x-researcher">Бот</button>
-    <span class="sep"></span>
-    <label><input type="checkbox" id="live"> живые данные</label>
-    <code id="log">событий нет</code>
+    <label><input type="checkbox" id="live"> live data</label>
+    <code id="log">no events</code>
   </div>
 
   <script type="module">
     import { initUI, renderUI } from './ui.js';
 
     const q = new URLSearchParams(location.search);
-    const root = document.documentElement;
     const $log = document.getElementById('log');
     const log = (m) => { $log.textContent = m; };
     if (q.has('shot')) document.body.classList.add('shot');
 
-    // --- theme: what the scene module does in the real page (data-daylight + --night)
-    const NIGHT = { day: 0, golden: 0.1, dusk: 0.55, night: 1, dawn: 0.45 };
-    function setTheme(name) {
-      if (!(name in NIGHT)) name = 'day';
-      root.setAttribute('data-daylight', name);
-      root.style.setProperty('--night', String(NIGHT[name]));
-      document.querySelectorAll('[data-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === name)));
+    // ?still: no transitions or entrance animations, so a screenshot never catches a card mid-move
+    if (q.has('still')) { const st = document.createElement('style'); st.textContent = '*,*::before,*::after{transition:none!important;animation-duration:0s!important;animation-delay:0s!important}'; document.head.append(st); }
+    const bg = q.get('bg') || 'white';
+    document.body.dataset.bg = bg;
+    if (bg === 'scene') {
+      const f = document.createElement('iframe');
+      f.src = '../index.html?mode=wallpaper';
+      f.addEventListener('load', () => { try { const st = f.contentDocument.createElement('style'); st.textContent = '.wp-status{display:none!important}'; f.contentDocument.head.append(st); } catch {} });
+      document.querySelector('#scene .plate').append(f);
     }
-    document.querySelectorAll('[data-theme]').forEach((b) => b.addEventListener('click', () => setTheme(b.dataset.theme)));
-    setTheme(q.get('theme') || 'day');
-    if (q.has('flip')) { const [to, at] = q.get('flip').split('@'); setTimeout(() => setTheme(to), Number(at) || 1500); } // transition test
 
     // --- data
     const STEPS = {
-      working: ['пишу драфт поста', 'собираю данные', 'проверяю источники', 'рисую баннер, вариант 2', 'считаю охват 40 постов', 'разбираю новые закладки', 'сверяю расходы за месяц'],
-      idle: ['файл готов, жду новую задачу', 'остановился, ничего не запускаю', 'пятничный шторм готов'],
-      waiting_user: ['жду ответа: какой тред берём?', 'жду ок на бюджет $40', 'нужен выбор: вариант A или B'],
-      error: ['лимит X 429, повтор через 15 мин', 'не открылась страница, таймаут'],
-      done: ['отчёт готов', 'заметка опубликована'],
+      working: ['writing a post draft', 'collecting data', 'checking sources', 'drawing banner, option 2', 'counting reach of 40 posts', 'sorting new bookmarks', 'matching monthly spend'],
+      idle: ['file ready, waiting for a new task', 'stopped, nothing running', 'Friday storm is ready'],
+      waiting_user: ['waiting for your reply: which thread?', 'need an ok on the $40 budget', 'need a choice: option A or B'],
+      error: ['X limit 429, retry in 15 min', 'page did not open, timeout'],
+      done: ['report ready', 'note published'],
     };
     const MIX = ['working', 'working', 'working', 'working', 'idle', 'idle', 'waiting_user', 'error', 'done', 'stuck'];
     const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
     const res = await fetch('../data/demo-state.json');
     const state = await res.json();
-    for (const id of ['x-writer', 'grok-bot', 'codila-x-researcher']) state.bots[id].chat_url = 'grokbot://app/v1/agent?id=' + id;
+    for (const id of ['x-writer', 'grok-bot', 'codila-x-researcher', 'analytics-analyst', 'trendy-x']) state.bots[id].chat_url = 'grokbot://app/v1/agent?id=' + id;
+
+    // the fields the bots-only mode adds: finished (last 24 h, newest first) and routines (by next run)
+    const T0 = Date.parse(state.now);
+    const ago = (m) => new Date(T0 - m * 60000).toISOString();
+    const inn = (m) => new Date(T0 + m * 60000).toISOString();
+    const nm = (id) => state.bots[id].name;
+    if (q.get('fin') !== '0') {
+      state.finished = [
+        ['qt-scout', 'found 6 posts to quote', 4], ['banner-visuals', '3 covers ready for the series', 12],
+        ['bookmarks-brain', 'digest of 40 bookmarks sent', 37], ['substack', 'Friday issue assembled', 95],
+        ['warren-buffett', 'quarterly notes summarised', 210], ['grok-bot', 'R4: weekly summary posted', 480], ['jevopus', 'reply draft approved', 900],
+      ].map(([bot, step, m]) => ({ t: ago(m), bot, name: nm(bot), step }));
+    }
+    if (q.get('routines') !== '0') {
+      state.routines = [
+        ['x-writer', 'Morning thread draft', 'every day 09:00', 14], ['competitor-watch', 'Competitor scan', 'every 2 h', 95],
+        ['analytics-analyst', 'Weekly reach report', 'Mondays 08:00', 60 * 20], ['bookmarks-brain', 'Bookmarks digest', 'Fridays 18:00', 60 * 30],
+      ].map(([bot, routine, schedule, m]) => ({ bot, name: nm(bot), routine, schedule, next_run: inn(m) }));
+    }
+    if (q.get('fin') === 'empty') state.finished = [];
+    if (q.get('routines') === 'empty') state.routines = [];
+    if (q.has('calm')) for (const b of Object.values(state.bots)) { if (['waiting_user', 'error', 'stuck'].includes(b.effective_status)) { b.status = b.effective_status = 'working'; } }
+    if (q.get('usage') === '0') state.usage.total_used_pct = null;
+    if (q.has('pct')) state.usage.total_used_pct = Number(q.get('pct'));
 
     const ctx = { currentFloor: q.get('floor') || 'x-content', selectedBot: q.get('sel') || null };
     if (ctx.selectedBot === 'none') ctx.selectedBot = null;
     const render = () => renderUI(state, ctx);
     const syncDev = () => document.querySelectorAll('[data-sel]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.sel === 'none') === !ctx.selectedBot)));
+
+    // dock cards: ?open=all | none | a comma list (set before initUI reads localStorage)
+    if (q.has('open')) {
+      const v = q.get('open');
+      const keys = ['waiting', 'finished', 'routines'];
+      const on = v === 'all' ? keys : v === 'none' ? [] : v.split(',');
+      try { localStorage.setItem('bothq.dock', JSON.stringify(Object.fromEntries(keys.map((k) => [k, on.includes(k)])))); } catch {}
+    }
+    if (q.has('blur')) { try { localStorage.setItem('bothq.waitBlur', q.get('blur') === '1' ? '1' : '0'); } catch {} }
 
     initUI({
       onSelectBot: (id) => { ctx.selectedBot = id; log('onSelectBot(' + id + ')'); syncDev(); render(); },
@@ -150,7 +179,7 @@
       bot.history.length = Math.min(bot.history.length, 20);
       state.feed.unshift({ t: state.now, bot: id, name: bot.name, status, step });
       state.feed.length = Math.min(state.feed.length, 100);
-      if (tick % 20 === 0) { state.usage.total_used_pct = Math.min(100, state.usage.total_used_pct + 1); state.usage.updated_at = state.now; }
+      if (state.usage.total_used_pct != null && tick % 20 === 0) { state.usage.total_used_pct = Math.min(100, state.usage.total_used_pct + 1); state.usage.updated_at = state.now; }
       recount();
     }
 
@@ -161,7 +190,7 @@
       render();
     }, 1000);
 
-    window.__harness = { state, ctx, mutate, render, setTheme };
+    window.__harness = { state, ctx, mutate, render };
   </script>
 </body>
 </html>

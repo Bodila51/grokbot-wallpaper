@@ -7,18 +7,19 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { loadOfficeAssets } from './office.js';
 import { Building } from './building.js';
 import { createDaylight } from './daylight.js';
-import { createSky } from './sky.js';
-import { createWordmark } from './brand.js';
-import { createPost, tiltShiftEnabled } from './post.js';
+import { createPost } from './post.js';
+import { studioCss } from './studio.js';
 import { Actor } from './actor.js';
 import { generateBlob } from './blobgen.js';
 import { Spring, clamp } from './spring.js';
 import { sofiaHour, fontsPromise } from './walls.js';
 
-const ASSETS = '/assets';
+// Relative to the page (not the site root), so the office also works when it is published in a sub-folder, e.g.
+// https://bodila51.github.io/grokbot-wallpaper/office/ -> ../assets. Locally the page is at `/`, where this is /assets.
+const ASSETS = '../assets';
 const ISO_DIR = new THREE.Vector3(1, 1, 1).normalize();
 const HOME = { x: -0.4, y: -0.3, z: 0.3 };             // camera target relative to the active floor's surface
-const VIEW_SPAN = { w: 33, h: 20.5 };                 // meters visible at zoom 1 (the stack + sky around it)
+const VIEW_SPAN = { w: 35, h: 22 };                 // meters visible at zoom 1 (the stack + the white air around it)
 const ZOOM = { min: 0.75, max: 3, focus: 2 };
 const UI_LEFT = 230, UI_RIGHT = 360;                   // glass panels the building must not hide behind
 const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = ground foreshortening
@@ -26,7 +27,7 @@ const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = groun
 // the camera), neighbours alternating so tags never collide.
 const DESK_ORDER = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
-let renderer, labels, camera, scene, container, callbacks, daylight, building, wordmark, post;
+let renderer, labels, camera, scene, container, callbacks, daylight, building, post;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
@@ -69,8 +70,8 @@ export function initScene(el, cbs = {}) {
   ensureAssets();
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
-  // the tilt-shift composer (MSAA, half-float) is capped at 1.5x: soft by design, and it keeps VRAM and fill cost sane
-  renderer.setPixelRatio(Math.min(devicePixelRatio, tiltShiftEnabled() ? 1.5 : 2));
+  // the post chain (MSAA, half-float) is capped at 1.5x: soft by design, and it keeps VRAM and fill cost sane
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -87,8 +88,9 @@ export function initScene(el, cbs = {}) {
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
   scene.environmentIntensity = 0.55;
 
-  daylight = createDaylight({ scene, renderer, container });
-  createSky({ container });
+  daylight = createDaylight({ scene, renderer });
+  document.documentElement.dataset.sky = 'studio';        // white backdrop at every hour: the UI stays on light glass (web/styles.css)
+  container.style.background = studioCss();               // the same backdrop as the post pass draws, for the first moments
 
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 240);
   camera.position.copy(ISO_DIR).multiplyScalar(80);
@@ -96,13 +98,12 @@ export function initScene(el, cbs = {}) {
 
   loadingEl = document.createElement('div');
   loadingEl.className = 'hq-loading';
-  loadingEl.textContent = 'Собираю здание…';
+  loadingEl.textContent = 'Building the office…';
   container.append(loadingEl);
 
   loadOfficeAssets(`${ASSETS}/office`).then((a) => {
     assets = a;
     building = new Building({ scene, daylight, assets: a, baseUrl: `${ASSETS}/office`, renderer });
-    wordmark = createWordmark(building.group, { logoUrl: `${ASSETS}/brand/logo.png` });
     a.spots.lounges.forEach((s) => { if (s) s.lounge = true; });
     window.bothq = Object.assign(window.bothq || {}, { source: a.source });
     resize();
@@ -110,7 +111,7 @@ export function initScene(el, cbs = {}) {
     Promise.race([fontsPromise, new Promise((r) => setTimeout(r, 1500))]).then(go, go);
   });
 
-  if (tiltShiftEnabled()) post = createPost(renderer, scene, camera);
+  post = createPost(renderer, scene, camera);
 
   addPointerHandlers();
   new ResizeObserver(resize).observe(container);
@@ -134,12 +135,6 @@ function ensureAssets() {
     const l = document.createElement('link');
     l.rel = 'stylesheet';
     l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&display=swap';
-    document.head.append(l);
-  }
-  if (!document.querySelector('link[href*="family=Michroma"]')) {      // the tower's wordmark (brand.js)
-    const l = document.createElement('link');
-    l.rel = 'stylesheet';
-    l.href = 'https://fonts.googleapis.com/css2?family=Michroma&display=swap';
     document.head.append(l);
   }
 }
@@ -297,21 +292,9 @@ function stepCamera(dt) {
   clampTarget();
   cam.x.step(dt); cam.y.step(dt); cam.z.step(dt); cam.zoom.step(dt);
   const z = clamp(Math.exp(cam.zoom.x), ZOOM.min * 0.85, ZOOM.max * 1.1);
-  if (Math.abs(z - camera.zoom) > 1e-5) { camera.zoom = z; camera.updateProjectionMatrix(); updateFade(z); }
+  if (Math.abs(z - camera.zoom) > 1e-5) { camera.zoom = z; camera.updateProjectionMatrix(); }
   tmp.set(cam.x.x, cam.y.x, cam.z.x);
   camera.position.copy(tmp).addScaledVector(ISO_DIR, 80);
-}
-
-// The bottom fade (CSS mask on the canvas) gives way when zoomed in, so close-ups are not washed out.
-let fadeKey = '';
-function updateFade(z) {
-  const k = clamp((z - 1) / 1.1, 0, 1);
-  const a = Math.round(62 + 34 * k), b = Math.round(82 + 16 * k), c = Math.round(97 + 3 * k);
-  const key = `${a}|${b}|${c}`;
-  if (key === fadeKey) return;
-  fadeKey = key;
-  const st = renderer.domElement.style;
-  st.setProperty('--hq-f0', `${a}%`); st.setProperty('--hq-f1', `${b}%`); st.setProperty('--hq-f2', `${c}%`);
 }
 
 function clampTarget() {
@@ -511,7 +494,6 @@ function frame(t) {
   daylight.update(dt, nowMs);
   stepCamera(dt);
   if (building) building.update(dt, nowMs);
-  wordmark?.update(daylight.night);
   if (pointerDirty && !drag?.panning) { pointerDirty = false; setHover(pick()); }
   updateCursorGround();
 

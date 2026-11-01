@@ -2,6 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<script>
+// A dashboard link, …/grokbot-wallpaper/#gbw-… (maybe with &ntfy=… after it), opens the 3D office. The hash never
+// leaves the browser, so the topic is not sent to any server.
+function toOffice() { if (/^#gbw-[\w-]+(&|$)/.test(location.hash)) location.replace('office/' + location.hash); }
+toOffice();
+addEventListener('hashchange', toOffice);                  // the link pasted into a tab that already shows this page
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Grok Bot Wallpaper</title>
 <meta name="description" content="A live wallpaper that keeps an eye on your cursor and on your bots. Free for Windows with Lively Wallpaper; Mac app coming soon.">
@@ -15,7 +22,8 @@
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="icon.png" type="image/png">
+<link rel="icon" href="assets/brand/logo-mark.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/brand/logo-mark.png">
 <link rel="preload" href="fonts/host-grotesk-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
 /* One rounded stage holds the live bot; below it the features and the install steps are tiles of one family (one
@@ -83,6 +91,8 @@ a { color: inherit; text-decoration: none; }
 }
 .stage__nav, .stage__title, .stage__actions { position: absolute; z-index: 1; }
 .stage__title { top: var(--in); left: 50%; translate: -50% 0; text-align: center; width: max-content; max-width: 30ch; pointer-events: none; }
+/* the project mark, Yarik's own image, shown as it is */
+.mark { display: block; width: 40px; height: 40px; margin: 0 auto 12px; }
 .hero h1 { font-size: 22px; font-weight: 600; letter-spacing: -.025em; line-height: 1.2; }
 .stage__title p { margin-top: 4px; font-size: 15px; line-height: 1.4; letter-spacing: -.008em; }
 .stage__nav { top: var(--in); left: var(--in); display: flex; gap: clamp(28px, 3.4vw, 56px); font-size: 14px; line-height: 1.7; }
@@ -269,11 +279,21 @@ a { color: inherit; text-decoration: none; }
   font: 13px/1.6 ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .code--link { color: #F5F5F7; }
-.ch { color: #9BDC3C; }
-.connect[data-state="empty"] .ch { color: var(--on-graphite-soft); opacity: .6; }
-.connect[data-state="new"] .ch { animation: ch-in 420ms var(--ease-out); }
-@keyframes ch-in { from { opacity: 0; filter: blur(3px); } }
-.flow__check { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }
+/* the prompt is long: it scrolls inside its box, the page does not grow with it */
+.code--prompt { max-height: 260px; overflow-y: auto; overscroll-behavior: contain; }
+.howto { margin: 24px 0 0; padding: 0 var(--tile-pad); list-style: none; counter-reset: how; display: grid; gap: 14px; max-width: 40ch; }
+.howto li { counter-increment: how; display: grid; grid-template-columns: 26px 1fr; font-size: 15px; line-height: 1.45; color: var(--on-graphite); }
+.howto li::before { content: counter(how); color: #8A8A92; font-weight: 600; }
+.dash__hint { margin-top: 4px; font-size: 13px; color: var(--on-graphite-soft); }
+.dash__input {
+  width: 100%; margin-top: 10px; height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid #44444B; background: #1E1E22;
+  color: var(--on-graphite); font: 14px/1 ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+}
+.dash__input::placeholder { color: #77777F; }
+.dash__input:focus-visible { outline: 2px solid var(--on-graphite); outline-offset: 2px; border-color: transparent; }
+.dash__open { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 10px; }
+.btn[aria-disabled="true"] { opacity: .4; pointer-events: none; }
+.dash .connect__status { margin-top: 10px; }
 .connect__status { font-size: 14px; color: var(--on-graphite-soft); }
 .connect__status[data-ok] { color: #9BDC3C; font-weight: 500; }
 .step__n { display: block; padding: 22px var(--tile-pad) 0; font-size: 44px; line-height: 1; font-weight: 500; letter-spacing: -.04em; color: #8A8A92; }
@@ -286,6 +306,37 @@ a { color: inherit; text-decoration: none; }
 .link__url span { color: var(--on-graphite-soft); }
 .link__url .nb { font-weight: inherit; white-space: nowrap; }
 .copy span { display: inline-block; }
+/* white or black Grok Bot: one choice, shown twice (under the title, and in step 2 where the link is copied). A dark
+   thumb slides under the picked side; the bots on this page change at once and the Lively links carry ?bot=black. */
+.pick { position: relative; display: inline-grid; grid-template-columns: 1fr 1fr; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); pointer-events: auto; }
+.stage__title .pick { margin-top: 14px; }
+.pick button {
+  position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 34px; padding: 0 16px;
+  border: 0; border-radius: 999px; background: none; color: var(--ink); font: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+  transition: color 200ms ease; -webkit-tap-highlight-color: transparent;
+}
+.pick button[aria-checked="true"] { color: #FFFFFF; }
+.pick__thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px; background: var(--ink); transition: transform 260ms var(--ease-out); }
+.pick[data-bot="black"] .pick__thumb { transform: translateX(100%); }
+.sw { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.sw--white { background: #FFFFFF; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .3); }
+.sw--black { background: #111113; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .45); }
+.pick--dark { background: #3A3A40; box-shadow: none; }
+.pick--dark button { color: var(--on-graphite); }
+.pick--dark button[aria-checked="true"] { color: var(--ink); }
+.pick--dark .pick__thumb { background: var(--on-graphite); }
+/* on the black ball the pills turn light, so they keep standing out (only where they sit on the stage) */
+@media (min-width: 821px) and (min-aspect-ratio: 4/5) {
+  .hero[data-bot="black"] .stage__actions .btn--ink { background: #FFFFFF; color: var(--ink); }
+  .hero[data-bot="black"] .stage__actions .btn--soft { background: rgba(255, 255, 255, .16); color: #FFFFFF; }
+}
+@media (min-width: 821px) and (min-aspect-ratio: 4/5) and (hover: hover) and (pointer: fine) {
+  .hero[data-bot="black"] .stage__actions .btn--ink:hover { background: #F2F2F4; }
+  .hero[data-bot="black"] .stage__actions .btn--soft:hover { background: rgba(255, 255, 255, .24); }
+}
+.pick-row { display: flex; align-items: center; gap: 12px; padding: 16px var(--tile-pad) 0; font-size: 14px; color: var(--on-graphite-soft); }
+.suffix:empty { display: none; }
+.link__url .suffix { color: #9BDC3C; }
 /* step 1's action is the app itself: its name, where it comes from and Get; the whole card opens the Store */
 .store {
   display: flex; align-items: center; gap: 16px; width: 100%; max-width: 420px; padding: 14px 14px 14px 18px; border-radius: 16px; background: #F5F5F7; color: var(--ink);
@@ -396,6 +447,7 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
   .stage__title p, .on-dark .stage__title p { color: var(--soft); }
   .hero h1 { font-size: clamp(34px, 9.4vw, 46px); letter-spacing: -.04em; line-height: 1.02; }
   .stage__title p { margin-top: 10px; font-size: 18px; line-height: 1.4; }
+  .mark { width: 48px; height: 48px; margin: 0 0 16px; }
   .stage { height: auto; min-height: 0; aspect-ratio: 4 / 5; max-height: 74svh; }
 }
 @media (max-width: 640px) {
@@ -424,8 +476,14 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
     <div><b>Look closer</b><a href="#does">What it does</a><a href="face/" target="_blank">Open in a new tab</a><a href="#support">Keep it free</a></div>
   </nav>
   <div class="stage__title">
+    <img class="mark" src="assets/brand/logo-mark.png" width="40" height="40" alt="">
     <h1>Grok Bot Wallpaper</h1>
     <p>A live wallpaper that keeps an eye on your cursor and on your bots.</p>
+    <div class="pick" role="radiogroup" aria-label="Grok Bot colour" data-bot="white">
+      <button type="button" role="radio" aria-checked="true" data-pick="white"><i class="sw sw--white"></i>White</button>
+      <button type="button" role="radio" aria-checked="false" data-pick="black"><i class="sw sw--black"></i>Black</button>
+      <span class="pick__thumb" aria-hidden="true"></span>
+    </div>
   </div>
   <div class="stage__actions">
     <a class="btn btn--ink" href="#windows">Install on Windows</a>
@@ -497,8 +555,13 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
           <div class="side">
             <span class="step__n"><span class="sr">Step </span>2</span>
             <p class="tile__copy"><b>Add Grok Bot.</b> In Lively, click Add Wallpaper, paste this link under Enter URL and press Enter.</p>
+            <div class="pick-row"><span>Your bot</span><div class="pick pick--dark" role="radiogroup" aria-label="Grok Bot colour" data-bot="white">
+                <button type="button" role="radio" aria-checked="true" data-pick="white"><i class="sw sw--white"></i>White</button>
+                <button type="button" role="radio" aria-checked="false" data-pick="black"><i class="sw sw--black"></i>Black</button>
+                <span class="pick__thumb" aria-hidden="true"></span>
+              </div></div>
             <div class="actions">
-              <p class="link__url" id="wall-url"><span>https://</span>bodila51.github.io/<wbr><b class="nb">grokbot-wallpaper/face/</b></p>
+              <p class="link__url" id="wall-url"><span>https://</span>bodila51.github.io/<wbr><b class="nb">grokbot-wallpaper/face/</b><wbr><span class="suffix" data-suffix="?"></span></p>
               <button class="btn btn--light copy" type="button" id="copy"><span aria-live="polite">Copy link</span></button>
             </div>
           </div>
@@ -541,28 +604,34 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
             <a class="btn btn--dim" href="face/" data-fullscreen>Try it full screen</a>
           </div>
         </div>
-        <div class="tile connect rise" style="--i:6" id="own" data-state="empty">
+        <div class="tile connect rise" style="--i:6" id="own">
           <div class="side">
-            <p class="tile__copy"><b>Connect your Grok Bot.</b> Until you do, the cards show sample bots. Make a private link, give your bots one rule, and the wallpaper shows yours, live. About a minute, nothing to install.</p>
-            <div class="actions">
-              <button class="btn btn--light" type="button" id="make">Create my link</button>
-            </div>
+            <p class="tile__copy"><b>Connect your Grok Bot.</b> Until you do, the cards show sample bots. Paste one prompt into Grok Bot: it sets up all your bots and replies with two links, your live 3D office and your wallpaper. About a minute, nothing to install.</p>
+            <ol class="howto">
+              <li>Copy the prompt and paste it into Grok Bot.</li>
+              <li>Grok Bot sets up all your bots and sends you two links.</li>
+              <li>Paste either link here to open your office and your wallpaper.</li>
+            </ol>
           </div>
           <div class="flow">
             <div class="flow__step">
-              <div class="flow__head"><span>Paste this to your Grok Bot</span><button class="btn btn--dim btn--small copy" type="button" data-copy="rule" disabled><span aria-live="polite">Copy</span></button></div>
-              <pre class="code" id="rule">Save this rule in the shared memory of ALL my bots: whenever your status changes (you start a task, finish it, need me, hit an error, go idle), run one command: curl -s -d '{"bot":"&lt;your exact name&gt;","status":"working|idle|waiting_user|error|done","step":"&lt;what you are doing, max 80 chars&gt;"}' https://ntfy.sh/<span class="ch" data-ch>gbw-xxxxxxxxxxxxxxxxxxxxxx</span> — pick one status from the list. Then post one line for yourself now as a test.</pre>
+              <div class="flow__head"><span>Paste this into Grok Bot</span><button class="btn btn--dim btn--small copy" type="button" data-copy="prompt" disabled><span aria-live="polite">Copy</span></button></div>
+              <pre class="code code--prompt" id="prompt" tabindex="0" aria-label="The setup prompt">Loading the prompt…</pre>
             </div>
-            <div class="flow__step">
-              <div class="flow__head"><span>Paste this link into Lively (Add Wallpaper, then URL)</span><button class="btn btn--dim btn--small copy" type="button" data-copy="feed" disabled><span aria-live="polite">Copy</span></button></div>
-              <pre class="code code--link" id="feed">https://bodila51.github.io/grokbot-wallpaper/face/?feed=<span class="ch" data-ch>gbw-xxxxxxxxxxxxxxxxxxxxxx</span></pre>
-            </div>
-            <div class="flow__check">
-              <button class="btn btn--dim btn--small" type="button" id="check" disabled>Check connection</button>
-              <p class="connect__status" id="status" aria-live="polite">Create your link first.</p>
+            <div class="flow__step dash" id="dash" data-state="empty">
+              <label class="flow__head" for="topic"><span>Open my dashboard</span></label>
+              <p class="dash__hint">Paste the topic or either link Grok Bot sent you.</p>
+              <input class="dash__input" id="topic" type="text" inputmode="url" autocomplete="off" spellcheck="false" placeholder="gbw-… or a link with it">
+              <p class="connect__status" id="seen" aria-live="polite"></p>
+              <div class="dash__open">
+                <a class="btn btn--light btn--small" id="open-office" href="office/" aria-disabled="true">Open my 3D office</a>
+                <a class="btn btn--dim btn--small" id="open-wall" href="face/" aria-disabled="true">Open my wallpaper</a>
+                <button class="btn btn--dim btn--small copy" type="button" data-copy="wall-link" disabled><span aria-live="polite">Copy wallpaper link for Lively</span></button>
+              </div>
+              <pre class="code code--link" id="wall-link" hidden></pre>
             </div>
           </div>
-          <p class="connect__fine">Your link name works like a password: keep it to yourself. The lines go through ntfy.sh and stay there for 12 hours. Running your own Bot HQ server instead? <a href="https://github.com/Bodila51/grokbot-wallpaper#readme" target="_blank" rel="noopener">Read the setup on GitHub</a>.</p>
+          <p class="connect__fine">Your topic works like a password: keep it to yourself. Status lines go through ntfy.sh and stay there for 12 hours. Running your own Bot HQ server instead? <a href="https://github.com/Bodila51/grokbot-wallpaper#readme" target="_blank" rel="noopener">Read the setup on GitHub</a>.</p>
         </div>
       </div>
     </div>
@@ -695,80 +764,138 @@ async function copyFrom(btn, text, shownIn) {
   clearTimeout(btn.t); btn.t = setTimeout(() => relabel(label, back), 1800);
 }
 const copy = document.getElementById('copy');
-copy.addEventListener('click', () => copyFrom(copy, LINK, document.getElementById('wall-url')));
+copy.addEventListener('click', () => copyFrom(copy, currentLink(), document.getElementById('wall-url')));
 
-// Connect your Grok Bot. The channel name is made here, from the browser's own random numbers, and goes nowhere
-// until the visitor pastes it: gbw- and 22 letters or digits. It is kept in this browser (a key of the landing's own,
-// so the wallpapers on this page keep showing the sample bots) and fills both texts. Check connection reads the
-// channel's last hour from ntfy.sh, for up to three minutes, and names the bots that have posted.
-const connect = document.getElementById('own'), make = document.getElementById('make');
-const check = document.getElementById('check'), note = document.getElementById('status');
-const KEY = 'gbw.landing-feed';
-let channel = null, polling = null;
-function newChannel() {
-  const abc = 'abcdefghijklmnopqrstuvwxyz0123456789', buf = new Uint8Array(64);
-  let out = '';
-  while (out.length < 22) {
-    crypto.getRandomValues(buf);
-    for (const b of buf) if (b < 252 && out.length < 22) out += abc[b % 36];  // 252 = 7 × 36: no letter is likelier
+// White or black Grok Bot: the visitor's pick. The wallpaper itself remembers it (gbw.bot, this site's storage), so the
+// bots on this page, full screen and a new tab all follow; the frames already open change at once through the
+// wallpaper's own grokBot.setBot, behind a short blur so the swap reads as one ball changing. Lively runs the
+// wallpaper from another site, so its links carry the pick as ?bot=black.
+const picks = [...document.querySelectorAll('.pick')];
+// A shared link can pick it too: ?bot=black or ?bot=white.
+let botColor = (() => {
+  const asked = new URLSearchParams(location.search).get('bot');
+  if (asked === 'black' || asked === 'white') return asked;
+  try { return localStorage.getItem('gbw.bot') === 'black' ? 'black' : 'white'; } catch { return 'white'; }
+})();
+function currentLink() { return LINK + (botColor === 'black' ? '?bot=black' : ''); }
+function showBot(color, animate) {
+  botColor = color;
+  live.closest('.hero').dataset.bot = color;
+  for (const p of picks) {
+    p.dataset.bot = color;
+    p.querySelectorAll('[data-pick]').forEach((b) => { const on = b.dataset.pick === color; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
   }
-  return 'gbw-' + out;
+  document.querySelectorAll('[data-suffix]').forEach((el) => { el.textContent = color === 'black' ? `${el.dataset.suffix}bot=black` : ''; });
+  try { localStorage.setItem('gbw.bot', color); } catch {}
+  document.dispatchEvent(new Event('bot-color'));
+  for (const f of [live, ...closeups.map((c) => c.el)]) {
+    const swap = () => { try { f.contentWindow?.grokBot?.setBot(color); } catch {} };
+    if (!animate || calm.matches || !f.animate) { swap(); continue; }
+    f.animate([{ filter: 'blur(0px)', opacity: 1 }, { filter: 'blur(8px)', opacity: 0.6 }], { duration: 140, easing: 'ease-out' }).finished.then(() => {
+      swap();
+      f.animate([{ filter: 'blur(8px)', opacity: 0.6 }, { filter: 'blur(0px)', opacity: 1 }], { duration: 280, easing: 'cubic-bezier(.23, 1, .32, 1)' });
+    });
+  }
 }
-function useChannel(name, fresh) {
-  channel = name;
-  connect.querySelectorAll('[data-ch]').forEach((el) => { el.textContent = name; });
-  connect.dataset.state = fresh ? 'new' : 'ready';
-  connect.querySelectorAll('[data-copy], #check').forEach((b) => { b.disabled = false; });
-  make.textContent = 'Make a new link';
-  make.classList.replace('btn--light', 'btn--dim');
-  clearInterval(polling); polling = null;
-  delete note.dataset.ok;
-  note.textContent = 'Paste both texts, then check the connection.';
+showBot(botColor, false);
+for (const p of picks) {
+  p.addEventListener('click', (e) => { const b = e.target.closest('[data-pick]'); if (b && b.dataset.pick !== botColor) showBot(b.dataset.pick, true); });
+  p.addEventListener('keydown', (e) => {                  // a radio group: the arrows move the pick
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    e.preventDefault();
+    showBot(botColor === 'white' ? 'black' : 'white', true);
+    p.querySelector(`[data-pick="${botColor}"]`).focus();
+  });
 }
-try { const kept = localStorage.getItem(KEY); if (/^gbw-[a-z0-9]{22}$/.test(kept || '')) useChannel(kept, false); } catch {}
-make.addEventListener('click', () => {
-  if (channel && !confirm('Make a new link? Your bots and Lively will need the new one.')) return;
-  const name = newChannel();
-  try { localStorage.setItem(KEY, name); } catch {}
-  useChannel(name, true);
+
+// Connect your Grok Bot. The setup prompt is PROMPT.md, the repo's own file, shown as it is (its first fenced block, if
+// it has one, is the prompt itself). Grok Bot makes the topic and replies with the links; the visitor pastes the topic or
+// either link into Open my dashboard, which counts the bots seen on the topic in the last 12 hours (status lines and the
+// roster line) and opens their office and wallpaper (both take the topic after #). The topic is kept in this browser only.
+const promptBox = document.getElementById('prompt');
+fetch('PROMPT.md', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : Promise.reject(r.status))).then((md) => {
+  const fenced = md.match(/```[^\n]*\n([\s\S]*?)```/);
+  promptBox.textContent = (fenced ? fenced[1] : md).trim();
+  document.querySelector('[data-copy="prompt"]').disabled = false;
+}).catch(() => {
+  promptBox.innerHTML = 'The prompt did not load. <a href="https://github.com/Bodila51/grokbot-wallpaper/blob/main/PROMPT.md" target="_blank" rel="noopener">Open it on GitHub</a>.';
 });
-connect.querySelectorAll('[data-copy]').forEach((btn) => btn.addEventListener('click', () => {
+document.querySelectorAll('#own [data-copy]').forEach((btn) => btn.addEventListener('click', () => {
   const box = document.getElementById(btn.dataset.copy);
   copyFrom(btn, box.textContent, box);
 }));
-async function poll(started) {
+
+const KEY = 'gbw.landing-feed';
+const dash = document.getElementById('dash'), topicIn = document.getElementById('topic'), seen = document.getElementById('seen');
+const openOffice = document.getElementById('open-office'), openWall = document.getElementById('open-wall');
+const wallLink = document.getElementById('wall-link'), copyWall = document.querySelector('[data-copy="wall-link"]');
+let topic = null, ntfy = null, polling = null;
+const findTopic = (text) => (String(text).match(/gbw-[A-Za-z0-9_-]{6,}/) || [])[0] || null;
+// A self-hosted ntfy rides along as &ntfy=<https server> after the topic; anything else is ignored.
+function findServer(text) {
+  const m = String(text).match(/[#&?]ntfy=([^&\s#]+)/);
+  if (!m) return null;
+  try { const u = new URL(decodeURIComponent(m[1])); return u.protocol === 'https:' ? u.origin + u.pathname.replace(/\/+$/, '') : null; } catch { return null; }
+}
+// The topic goes after # (a hash never reaches the site's server); the bot colour is no secret and stays ?bot=black.
+function links() {
+  const extra = ntfy ? `&ntfy=${encodeURIComponent(ntfy)}` : '', bot = botColor === 'black' ? '?bot=black' : '';
+  openOffice.href = `office/#${topic}${extra}`;
+  openWall.href = `face/${bot}#${topic}${extra}`;
+  wallLink.textContent = `${LINK}${bot}#${topic}${extra}`;
+}
+async function count(started) {
   try {
-    const res = await fetch(`https://ntfy.sh/${channel}/json?poll=1&since=1h`, { cache: 'no-store' });
+    const res = await fetch(`${ntfy || 'https://ntfy.sh'}/${topic}/json?poll=1&since=12h`, { cache: 'no-store' });
     if (!res.ok) throw new Error(res.status);
     const bots = new Set();
     for (const line of (await res.text()).split('\n')) {
       try {
         const m = JSON.parse(line);
-        if (m.event === 'message') { const b = JSON.parse(m.message); if (b && b.bot) bots.add(String(b.bot).slice(0, 40)); }
+        if (m.event !== 'message') continue;
+        const b = JSON.parse(m.message);                     // a status line names one bot, a roster line all of them
+        if (b && b.bot) bots.add(String(b.bot).slice(0, 40));
+        if (b && Array.isArray(b.roster)) b.roster.forEach((n) => n && bots.add(String(n).slice(0, 40)));
       } catch {}
     }
     if (bots.size) {
-      note.dataset.ok = '';
-      note.textContent = `Connected: ${bots.size} bot${bots.size > 1 ? 's' : ''} (${[...bots].slice(0, 4).join(', ')}${bots.size > 4 ? '…' : ''}).`;
-    }
-    if (Date.now() - started > 180000) {                     // three minutes is enough to say either way
-      clearInterval(polling); polling = null;
-      if (!bots.size) note.textContent = 'No lines yet. Check that the bots saved the rule, then try again.';
+      seen.dataset.ok = '';
+      seen.textContent = `Bots seen: ${bots.size} (${[...bots].slice(0, 4).join(', ')}${bots.size > 4 ? '…' : ''}).`;
+    } else {
+      delete seen.dataset.ok;
+      seen.textContent = 'Bots seen: 0 so far. Once Grok Bot has set them up, they show here within seconds.';
     }
   } catch {
-    clearInterval(polling); polling = null;
-    note.textContent = 'Could not reach ntfy.sh. Check your internet connection and try again.';
+    delete seen.dataset.ok;
+    seen.textContent = `Could not reach ${ntfy ? new URL(ntfy).host : 'ntfy.sh'}. Check your internet connection.`;
   }
+  if (Date.now() - started > 300000) { clearInterval(polling); polling = null; }   // five minutes, then quiet
 }
-check.addEventListener('click', () => {
-  if (!channel) return;
-  clearInterval(polling);
-  delete note.dataset.ok;
-  note.textContent = 'Waiting for the first line from your bots…';
+function useTopic(next, server = null) {
+  if (next === topic && server === ntfy) return;
+  topic = next;
+  ntfy = next ? server : null;
+  clearInterval(polling); polling = null;
+  const on = Boolean(topic);
+  dash.dataset.state = on ? 'ready' : 'empty';
+  [openOffice, openWall].forEach((a) => a.setAttribute('aria-disabled', String(!on)));
+  copyWall.disabled = !on;
+  wallLink.hidden = !on;
+  delete seen.dataset.ok;
+  if (!on) { seen.textContent = topicIn.value.trim() ? 'That has no topic in it: look for the part that starts with gbw-.' : ''; return; }
+  try { localStorage.setItem(KEY, topic); if (ntfy) localStorage.setItem(KEY + '.ntfy', ntfy); else localStorage.removeItem(KEY + '.ntfy'); } catch {}
+  links();
+  seen.textContent = 'Looking for your bots…';
   const started = Date.now();
-  poll(started);
-  polling = setInterval(() => poll(started), 4000);
-});
+  count(started);
+  polling = setInterval(() => count(started), 5000);
+}
+topicIn.addEventListener('input', () => useTopic(findTopic(topicIn.value), findServer(topicIn.value)));
+document.addEventListener('bot-color', () => { if (topic) links(); });
+try {
+  const kept = localStorage.getItem(KEY), server = localStorage.getItem(KEY + '.ntfy');
+  if (kept && findTopic(kept) === kept) { topicIn.value = kept + (server ? `&ntfy=${encodeURIComponent(server)}` : ''); useTopic(kept, findServer(topicIn.value)); }
+} catch {}
 
 // The desktop recording plays while it is on screen and pauses off it. With reduced motion it waits with its controls.
 const desk = document.getElementById('desk');
@@ -803,7 +930,7 @@ if (!calm.matches) {
     lv.dataset.open = ''; await wait(450);
     await to(field, 0.3, 0.55); await press(field);
     lv.dataset.focus = '';
-    for (const ch of LINK) {
+    for (const ch of currentLink()) {
       out.textContent += ch;
       if (text.scrollWidth > text.clientWidth) text.dataset.long = '';
       await wait(26);

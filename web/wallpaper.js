@@ -1,6 +1,6 @@
 /*
  * Wallpaper mode UI (?mode=wallpaper, for Lively Wallpaper): the office alone plus ONE small glass status line,
- * e.g. «6 работают · 1 ждёт тебя». Same two entry points as web/ui/ui.js, so app.js treats it as the UI module.
+ * e.g. "6 working · 1 waiting for you". Same two entry points as web/ui/ui.js, so app.js treats it as the UI module.
  *
  *   initUI()                       builds the status line (no panels, no floors list, no zoom, no feed)
  *   renderUI(state, view)          idempotent; only touches the DOM when a value changed
@@ -9,24 +9,20 @@
  * Style lives in web/styles.css under "wallpaper mode". All data goes in through textContent.
  */
 
-// Russian plural forms [one, few, many].
+// English plural forms [one, other].
 const FORMS = {
-  working: ['работает', 'работают', 'работают'],
-  attention: ['ждёт тебя', 'ждут тебя', 'ждут тебя'],
-  error: ['ошибка', 'ошибки', 'ошибок'],
+  working: ['working', 'working'],
+  attention: ['waiting for you', 'waiting for you'],
+  error: ['error', 'errors'],
 };
 
-function plural(n, [one, few, many]) {
-  n = Math.abs(Math.trunc(n));
-  const m10 = n % 10, m100 = n % 100;
-  if (m10 === 1 && m100 !== 11) return one;
-  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
-  return many;
+function plural(n, [one, other]) {
+  return Math.abs(Math.trunc(n)) === 1 ? one : other;
 }
 
 let el = null;
 const segs = {};            // key -> { root, num, label }
-let rest = null;            // «все отдыхают» / «ботов пока нет» when nothing is working or waiting
+let rest = null;            // "all resting" / "no bots yet" when nothing is working or waiting
 
 function seg(key, cls) {
   const num = Object.assign(document.createElement('b'), { className: 'wp-num' });
@@ -76,6 +72,6 @@ export function renderUI(state) {
   }
   const quiet = working + attention + error === 0;
   show(rest, quiet);
-  if (quiet) set(rest, total ? 'все отдыхают' : 'ботов пока нет');
+  if (quiet) set(rest, total ? 'all resting' : 'no bots yet');
   show(el, true);
 }

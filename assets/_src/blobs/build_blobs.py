@@ -2,10 +2,16 @@
 Bot HQ blob generator  (Blender 5.x, headless)
 
     blender -b --factory-startup -P build_blobs.py -- [--only id1,id2] [--no-thumbs] [--no-glb]
+    blender -b --factory-startup -P build_blobs.py -- --lib [--only shape1,shape2] [--lib-px 160] [--lib-samples 64]
 
 Builds every jelly blob in BLOBS from a data table and writes
     assets/blobs/<id>.glb            (root `blob` -> body, eye_L, eye_R, [extra])
     assets/blobs/thumbs/<id>.png     (256x256, transparent, Eevee)
+
+LIBRARY mode (--lib): same studio, material and eyes, but for ANY user's bots: every look shape x a fixed
+palette of LIB_COLORS, accessory none, rendered once and served as static files
+    assets/blobs/lib/<shape>-<RRGGBB>.png   (160x160, transparent)
+    assets/blobs/lib/index.json             ({"shapes": [...], "colors": [...]}, the palette the web picks from)
 
 Geometry is fully procedural (no modifiers): every silhouette is a closed 2D outline that is
 star-shaped around its origin, converted to a polar radius function r(theta).  The body is a
@@ -16,12 +22,13 @@ Coordinates while designing ("local"): x right, y up, +z = the way the blob face
 Blender coords = (x, -z, y), so the face looks toward Blender -Y == glTF +Z.   Units: metres.
 Angles of tilt are CCW as seen by the viewer looking at the face (same as the app avatars).
 """
-import bpy, bmesh, math, os, sys
+import bpy, bmesh, json, math, os, sys
 import numpy as np
 
 ROOT = r"C:\Users\Asus\Desktop\bot-hq\assets"
 OUT = os.path.join(ROOT, "blobs")
 THUMBS = os.path.join(OUT, "thumbs")
+LIB_DIR = os.path.join(OUT, "lib")
 SIZE = 0.8  # max dimension of a blob in metres
 FLAT_BOTTOM = 0.018  # height of the soft-flattened contact patch at the bottom (m)
 
@@ -31,6 +38,9 @@ if "--only" in argv:
     ONLY = argv[argv.index("--only") + 1].split(",")
 DO_GLB = "--no-glb" not in argv
 DO_THUMBS = "--no-thumbs" not in argv
+DO_LIB = "--lib" in argv
+LIB_PX = int(argv[argv.index("--lib-px") + 1]) if "--lib-px" in argv else 160
+LIB_SAMPLES = int(argv[argv.index("--lib-samples") + 1]) if "--lib-samples" in argv else 64
 
 
 # ----------------------------------------------------------------------------- colour helpers
@@ -42,6 +52,13 @@ def hex2lin(h, a=1.0):
     h = h.lstrip("#")
     r, g, b = (int(h[i:i + 2], 16) / 255.0 for i in (0, 2, 4))
     return (srgb2lin(r), srgb2lin(g), srgb2lin(b), a)
+
+
+def shade(h, t):
+    """mix a colour toward white (t > 0) or black (t < 0) by |t|; returns RRGGBB"""
+    h = h.lstrip("#")
+    tgt = 255 if t > 0 else 0
+    return "%02X%02X%02X" % tuple(round(c + (tgt - c) * abs(t)) for c in (int(h[i:i + 2], 16) for i in (0, 2, 4)))
 
 
 # ----------------------------------------------------------------------------- outline primitives
@@ -464,6 +481,38 @@ CLUSTER = [
     dict(key="black", color="#0C0C0E", shape=("star", dict(k=6, rin=0.58, p=1.1, tip_deg=90, N=1440)), rot=0, D=0.42,
          at=(0.02, 0.57, -0.09), eyes=dict(c=(0.0, -0.07), sp=0.25, w=0.115, h=0.24, pair=0, tilt=0)),
 ]
+TRIO_SHADES = (-0.10, 0.0, 0.10)
+
+# ----------------------------------------------------------------------------- library (any user's bots)
+# shapes = LOOK_SHAPES in web/lib/state.js; each reuses the geometry + face of the closest hand-made blob
+LIB_SHAPES = ["sphere", "rounded_cube", "pill", "triangle", "cone", "pentagon",
+              "hexagon", "star4", "star6", "clover", "rounded_square", "trio"]
+# 12 colours around the wheel (the Grok Bot palette of the owner's bots + violet + lime), then near-black and near-white.
+# The web (face.js libPick) snaps a bot's look.color to the nearest of these: keep the two lists in sync.
+LIB_COLORS = ["FB2B3E", "FD690F", "F6A317", "A8D52F", "1FAE63", "13B7A2",
+              "1E86FC", "7B5CF2", "F93498", "A06B39", "0C0C0E", "F3E7DB"]
+
+
+def _like(bid, **kw):
+    return dict(next(b for b in BLOBS if b["id"] == bid), **kw)
+
+
+LIB_SPECS = {
+    "sphere": _like("jevopus"),
+    "rounded_cube": _like("x-writer"),
+    "pill": _like("qt-scout"),
+    "triangle": _like("substack"),
+    "cone": dict(shape=("tri", dict(angles=[90, 218, 322], radii=[1.0, 0.86, 0.86], rr=0.30)), rot=0,
+                 eyes=dict(c=(0.0, -0.10), sp=0.23, w=0.10, h=0.23, pair=6, tilt=8)),
+    "pentagon": dict(shape=("poly", dict(n=5, R=1.0, rr=0.32, rot=90)), rot=0,
+                     eyes=dict(c=(0.0, 0.0), sp=0.25, w=0.105, h=0.24, pair=8, tilt=10)),
+    "hexagon": _like("bookmarks-brain"),
+    "star4": _like("ideas-sparring"),
+    "star6": _like("codila-x-researcher"),
+    "clover": _like("analytics-analyst"),
+    "rounded_square": _like("finance-team"),
+    "trio": dict(cluster=True),
+}
 
 
 # ----------------------------------------------------------------------------- blob assembly
@@ -493,8 +542,9 @@ def build_blob(spec):
     primary = None
     if spec.get("cluster"):
         mats = []
-        for i, part in enumerate(CLUSTER):
-            mats.append(make_mat("body_" + part["key"], part["color"]))
+        for i, part in enumerate(CLUSTER):   # lib mode: one colour, each blob a touch lighter/darker so they read apart
+            col = shade(spec["color"], TRIO_SHADES[i]) if spec.get("color") else part["color"]
+            mats.append(make_mat("body_" + part["key"], col))
         body_mats = mats
         for i, part in enumerate(CLUSTER):
             b = Body(part["shape"], part["rot"], part["D"], N=48, nb=6, flat=(0.5,), depth=0.5, wob=())
@@ -714,7 +764,45 @@ def tri_count(objs):
     return t
 
 
+def set_body_color(objs, hexcol):
+    """recolour the already built body in place (the trio has three body materials, one per blob)"""
+    mats = objs["body"].data.materials
+    for i, mat in enumerate(mats):
+        c = hex2lin(shade(hexcol, TRIO_SHADES[i]) if len(mats) == 3 else hexcol)
+        setin(get_principled(mat), "Base Color", c)
+        mat.diffuse_color = c
+
+
+def lib_main():
+    import time
+    t0 = time.time()
+    os.makedirs(LIB_DIR, exist_ok=True)
+    for ob in list(bpy.data.objects):
+        bpy.data.objects.remove(ob, do_unlink=True)
+    co, lights = setup_studio()
+    sc = bpy.context.scene
+    sc.render.resolution_x = sc.render.resolution_y = LIB_PX
+    try:
+        sc.eevee.taa_render_samples = LIB_SAMPLES
+    except Exception:
+        pass
+    shapes = [s for s in LIB_SHAPES if not ONLY or s in ONLY]
+    for shape in shapes:
+        clear_blob()
+        objs = build_blob(dict(LIB_SPECS[shape], id=shape, color="#" + LIB_COLORS[0]))
+        for hexcol in LIB_COLORS:
+            set_body_color(objs, hexcol)
+            render_thumb(co, lights, objs["_bbox"], os.path.join(LIB_DIR, "%s-%s.png" % (shape, hexcol)))
+        print("LIB %-15s %d colours  %.0fs" % (shape, len(LIB_COLORS), time.time() - t0))
+    if not ONLY:
+        with open(os.path.join(LIB_DIR, "index.json"), "w") as f:
+            json.dump({"shapes": LIB_SHAPES, "colors": LIB_COLORS}, f)
+    print("LIB DONE %.0fs" % (time.time() - t0))
+
+
 def main():
+    if DO_LIB:
+        return lib_main()
     os.makedirs(THUMBS, exist_ok=True)
     clear_blob()
     for ob in list(bpy.data.objects):

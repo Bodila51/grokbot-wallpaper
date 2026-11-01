@@ -1,5 +1,6 @@
 // The building stack (CONTRACT v2.4/v2.5): floors sorted by order, the active floor open, floors below closed,
-// floors above slid up out of the frame (opaque, never faded), roof on top, elevator shaft + cabin. Everything that
+// floors above slid up out of the frame (opaque, never faded), roof on top, elevator shaft + cabin. The stack is
+// exactly the user's floors (one per bot group) and stands on the studio ground at floor 1: nothing below it. Everything that
 // moves is a critically damped spring that can be re-targeted mid-flight (floor switch = elevator ride). The
 // open/closed swap of two floors happens in one frame at the peak of a short canvas blur ("whoosh"), so big floors
 // never cross-fade (that was hazy and heavy: every material went through the transparent pass).
@@ -14,7 +15,6 @@ const BLUR_TAIL = 0.4;                  // s for the blur to clear after the swa
 const BLUR_PX = 7;
 const REDUCED = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const CAB_H = 2.2;
-const BASE_FLOORS = 48;                 // anonymous closed floors under floor 1: deeper than any view (max pan + zoom-out, tall windows); off-screen ones are frustum-culled
 const NIGHT_TINT = [0.2, 0.26, 0.42];   // used when a baked mesh has no night lightmap
 
 // Night lightmaps (assets/office/night/<mesh name>.jpg) are loaded lazily, only once --night > 0, shared by every
@@ -73,7 +73,6 @@ class Instance {
 
   register(c, mesh, windowOffset) {
     this.mats.push(c);
-    if (this.kind === 'closed') steel(c);
     const bn = mesh.userData.bakedName;
     if (bn && c.map && !c.userData.nightPatched) this.b.patchBaked(c, bn);
     if (c.name === 'night_lamp') {
@@ -105,13 +104,6 @@ class Instance {
     for (const t of this.textures) t.dispose();
     this.root.removeFromParent();
   }
-}
-
-// Closed floors (the tower) are clad like a stainless-steel rocket body; the open office floor keeps its look.
-function steel(m) {
-  if (m.name === 'slab_white') { m.color.set(0xB9BEC5); m.metalness = 0.85; m.roughness = 0.3; }
-  else if (m.name === 'mullion_light') { m.color.set(0x4A5058); m.metalness = 0.8; m.roughness = 0.38; }
-  else if (m.name === 'night_windows') { m.roughness = 0.06; }
 }
 
 export class Building {
@@ -162,13 +154,6 @@ export class Building {
       inst.setShown(false);
       this.group.add(inst.root);
       this.pool.push(inst);
-    }
-    this.base = [];                     // the tower below the user's floors: static, closed, lit at night
-    for (let k = 1; k <= BASE_FLOORS; k++) {
-      const inst = new Instance(this, assets.templates.floor_closed, 'closed');
-      inst.root.position.y = -k * FLOOR_STEP;
-      this.group.add(inst.root);
-      this.base.push(inst);
     }
     this.pulseT = -1;                   // time since the current switch started (s), -1 = idle
     this.swapped = true;
@@ -337,7 +322,7 @@ export class Building {
   }
 
   prewarm(camera) {
-    const all = [this.roof, this.shaft, this.cabin, ...this.slots.map((s) => s.closed), ...this.pool, ...this.base];
+    const all = [this.roof, this.shaft, this.cabin, ...this.slots.map((s) => s.closed), ...this.pool];
     const saved = all.map((i) => i.root.visible);
     all.forEach((i) => { i.root.visible = true; });
     this.renderer.compile(this.scene, camera);
@@ -380,7 +365,7 @@ export class Building {
     this.cabinY.step(dt);
     this.shaftTop.step(dt);
     this.cabin.root.position.y = this.cabinY.x;
-    const bottom = -BASE_FLOORS * FLOOR_STEP - SLAB, top = Math.max(bottom + 0.1, this.shaftTop.x);
+    const bottom = -SLAB, top = Math.max(bottom + 0.1, this.shaftTop.x);
     this.shaft.root.position.y = bottom;
     this.shaft.root.scale.y = (top - bottom) / this.shaftH;
 

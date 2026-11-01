@@ -8,7 +8,7 @@ import { Spring, REDUCED, clamp, smoothstep } from './spring.js';
 export const STATUS_COLOR = {
   working: '#34C759', idle: '#A1A1A6', waiting_user: '#FF9F0A', error: '#FF3B30', stuck: '#FF9500', done: '#0A84FF',
 };
-const STATUS_LABEL = { waiting_user: 'Ждёт тебя', error: 'Ошибка', stuck: 'Завис?', done: 'Готово', working: 'Работает', idle: 'Отдыхает' };
+const STATUS_LABEL = { waiting_user: 'Waiting for you', error: 'Error', stuck: 'Stuck?', done: 'Done', working: 'Working', idle: 'Resting' };
 const CAMERA_YAW = Math.PI / 4;     // isometric camera sits on +X +Z
 const RESTING_TURN = 0.42;          // blobs lean toward the camera a bit
 const MODEL_HEIGHT = 1.0;

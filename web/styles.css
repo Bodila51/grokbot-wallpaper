@@ -89,8 +89,8 @@
   :root[data-daylight="dawn"] { --theme: 0; }
 }
 
-/* near-space backdrop (scene/sky.js): the sky is dark at every hour, so the UI stays on dark glass */
-:root[data-sky="space"] { --theme: 1; }
+/* white studio backdrop (scene/studio.js): the ground is white at every hour, so the UI stays on light glass */
+:root[data-sky="studio"] { --theme: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   :root.bhq-ready { transition: none; }
@@ -174,7 +174,6 @@ body {
 html.wallpaper, html.wallpaper * { cursor: default !important; -webkit-user-select: none; user-select: none; }
 html.wallpaper .hq-labels { display: none; }
 html.wallpaper.wp-tags .hq-labels { display: block; }
-html.wallpaper .hq-stars { animation: none; }
 
 .wp-status {
   position: fixed; z-index: 20; top: 24px; right: 28px;

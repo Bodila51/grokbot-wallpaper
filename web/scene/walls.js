@@ -1,4 +1,4 @@
-// Live wall screen ("Сегодня · <этаж>") and task board, drawn on canvases that texture the meshes
+// Live wall screen ("Today · <floor>") and task board, drawn on canvases that texture the meshes
 // `wall_screen` and `task_board` of the open floor (CONTRACT v2.5). Redrawn only when the data changes (≤ 1/s).
 import * as THREE from 'three';
 
@@ -13,8 +13,8 @@ const fontsPromise = (async () => {
     if (document.fonts) {
       await Promise.race([
         Promise.all([
-          document.fonts.load('600 24px Inter', 'Сегодня Задачи 0123456789'),
-          document.fonts.load('500 24px Inter', 'Работают события'),
+          document.fonts.load('600 24px Inter', 'Today Tasks 0123456789'),
+          document.fonts.load('500 24px Inter', 'Working events'),
           document.fonts.load('700 24px Inter', '0123456789'),
         ]).then(() => document.fonts.ready),
         new Promise((r) => setTimeout(r, 2500)),
@@ -152,7 +152,7 @@ export class WallDisplays {
 
     g.textBaseline = 'alphabetic';
     g.fillStyle = '#8E8E93'; g.font = `500 32px ${FONT}`;
-    const lead = 'Сегодня · ';
+    const lead = 'Today · ';
     g.fillText(lead, 44, 62);
     const lw = g.measureText(lead).width;
     g.fillStyle = '#F5F5F7'; g.font = `650 40px ${FONT}`;
@@ -162,10 +162,10 @@ export class WallDisplays {
     g.fillStyle = 'rgba(52,199,89,0.25)'; g.beginPath(); g.arc(W - 52, 50, 14, 0, 7); g.fill();
 
     const tiles = [
-      [`${working} из ${bots.length}`, 'работают сейчас'],
-      [String(events), 'событий за день'],
-      [String(done), 'задач закрыто'],
-      [hours.toFixed(1).replace('.', ','), 'часов в работе'],
+      [`${working} of ${bots.length}`, 'working now'],
+      [String(events), 'events today'],
+      [String(done), 'tasks done'],
+      [hours.toFixed(1), 'hours worked'],
     ];
     const tw = 205, gap = 14, x0 = 44, y0 = 100;
     tiles.forEach(([val, label], i) => {
@@ -180,7 +180,7 @@ export class WallDisplays {
     // 24-bar hourly chart, current hour highlighted
     const cx = 44, cw = W - 88, cy = 250, ch = 220;
     g.fillStyle = '#8E8E93'; g.font = `500 17px ${FONT}`;
-    g.fillText('События по часам', cx, cy - 4);
+    g.fillText('Events by hour', cx, cy - 4);
     const max = Math.max(1, ...hourly);
     const slot = cw / 24, bw = slot * 0.62;
     for (let i = 0; i < 24; i++) {
@@ -212,8 +212,8 @@ export class WallDisplays {
     g.fillStyle = '#E3E0D9'; g.fillRect(0, 68, W, 2);
 
     g.fillStyle = '#1D1D1F'; g.font = `700 34px ${FONT}`;
-    g.fillText('Задачи', 36, 49);
-    const tw0 = g.measureText('Задачи ').width;
+    g.fillText('Tasks', 36, 49);
+    const tw0 = g.measureText('Tasks ').width;
     g.fillStyle = '#6E6E73'; g.font = `600 26px ${FONT}`;
     g.fillText(`· ${ellipsize(g, d.floorName || '', 420)}`, 36 + tw0, 49);
 
@@ -226,7 +226,7 @@ export class WallDisplays {
     }
     if (!shown.length) {
       g.fillStyle = '#8E8E93'; g.font = `600 28px ${FONT}`;
-      g.fillText('На этаже пока никого нет', 36, 160);
+      g.fillText('Nobody on this floor yet', 36, 160);
     }
 
     const cols = 4, pad = 30, gap = 16, top = 90;

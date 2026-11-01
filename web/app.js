@@ -1,5 +1,6 @@
 // Glue: polls /api/state (CONTRACT §4), keeps the view (floor, selection), feeds the scene and the UI.
-// Without a server (static preview) it runs on web/data/demo-state.json with a local simulation.
+// With #<topic> in the link it reads the user's bots from their ntfy.sh channel instead (feed.js): no server at all.
+// Without either (static preview) it runs on web/data/demo-state.json with a local simulation.
 import { initScene, renderScene, zoom, focusBot } from './scene/scene.js';
 
 const POLL_MS = 1000;
@@ -92,8 +93,8 @@ function render() {
 async function poll() {
   try {
     const since = state && !state.demoLocal ? `?since=${state.version}` : '';
-    const res = await fetch(`/api/state${since}`, { cache: 'no-store', credentials: 'same-origin' });
-    if (res.status === 401) { location.href = '/login'; return; }
+    const res = await fetch(`api/state${since}`, { cache: 'no-store', credentials: 'same-origin' });   // relative: works under a sub-path too
+    if (res.status === 401) { location.href = 'login'; return; }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (demoTimer) { clearInterval(demoTimer); demoTimer = null; }
@@ -105,7 +106,15 @@ async function poll() {
   setTimeout(poll, POLL_MS);
 }
 
-poll();
+// ---------- the user's own bots: #<topic> ----------
+
+if (/^#[A-Za-z0-9_-]{6,64}(&ntfy=[^&]+)?$/.test(location.hash)) {
+  const { feedFromHash, connectFeed } = await import('./feed.js');
+  connectFeed(feedFromHash(location.hash), (data) => { state = data; render(); });
+  addEventListener('hashchange', () => location.reload());   // another channel: start over
+} else {
+  poll();
+}
 
 // ---------- static preview: local simulation ----------
 
@@ -118,14 +127,14 @@ async function startLocalDemo() {
 }
 
 const STEPS = {
-  working: ['сканирую X, 7 поисков', 'читаю 40 свежих постов', 'пишу драфт треда', 'проверяю цифры', 'собираю отчёт', 'рисую обложку', 'сверяю источники'],
-  waiting_user: ['жду ответа: публикуем?', 'нужен ок на бюджет', 'какой вариант берём?'],
-  error: ['лимит X 429, повтор через 15 мин', 'не открылся файл отчёта'],
-  done: ['готово: отчёт отправлен', 'драфт готов', 'задача закрыта'],
-  idle: ['жду новую задачу'],
+  working: ['scanning X, 7 searches', 'reading 40 fresh posts', 'drafting a thread', 'checking the numbers', 'compiling the report', 'drawing the cover', 'cross-checking sources'],
+  waiting_user: ['waiting for your answer: publish?', 'need a budget OK', 'which option should we pick?'],
+  error: ['X rate limit 429, retry in 15 min', "couldn't open the report file"],
+  done: ['done: report sent', 'draft ready', 'task closed'],
+  idle: ['waiting for a new task'],
 };
-const TASKS = ['Тред про AI-агентов на понедельник', 'Обложки для серии постов', 'Отчёт по охватам за неделю',
-  'Разбор постов конкурентов', 'Сводка по всем этажам', 'План задач на неделю'];
+const TASKS = ['Thread about AI agents for Monday', 'Covers for the post series', 'Weekly reach report',
+  'Competitor post breakdown', 'Summary across all floors', 'Plan for the week'];
 const NEXT = {
   working: [['working', 5], ['done', 3], ['waiting_user', 1], ['error', 0.5]],
   done: [['idle', 3], ['working', 2]],
