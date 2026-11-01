@@ -23,6 +23,7 @@ export function parseArgs(argv, env = process.env) {
     demo: null,
     tz: env.BOTHQ_TZ || 'Europe/Sofia',
     dataDir: null,
+    noCache: false,
     help: false,
   };
   for (let i = 0; i < argv.length; i++) {
@@ -42,6 +43,7 @@ export function parseArgs(argv, env = process.env) {
       case '--no-demo': o.demo = false; break;
       case '--tz': o.tz = val(); break;
       case '--data-dir': o.dataDir = path.resolve(val()); break;
+      case '--no-cache': o.noCache = true; break;
       case '-h': case '--help': o.help = true; break;
       default: throw new Error(`unknown argument: ${a}`);
     }
@@ -57,6 +59,7 @@ const HELP = `Bot HQ server
   --no-auth      disable the password gate (only with --host 127.0.0.1)
   --tz ZONE      timezone for timestamps and "today" (default Europe/Sofia)
   --data-dir D   config/credentials directory (default ./data)
+  --no-cache     revalidate /assets/ on every load too (a local wallpaper shows edited images after a reload)
 Env: BOTHQ_PASSWORD, BOTHQ_PORT, BOTHQ_HOST, BOTHQ_JOURNAL, BOTHQ_TZ
 `;
 
@@ -126,7 +129,7 @@ export function createApp(opts = {}) {
 
   const statics = createStatic([
     { prefix: '/', dir: path.join(root, 'web'), cache: 'no-cache' },
-    { prefix: '/assets/', dir: path.join(root, 'assets'), cache: 'public, max-age=3600' },
+    { prefix: '/assets/', dir: path.join(root, 'assets'), cache: opts.noCache ? 'no-cache' : 'public, max-age=3600' },
   ]);
 
   const configs = [
@@ -351,7 +354,7 @@ async function main() {
   try {
     app = createApp({
       root: ROOT, dataDir, journalPath, host: args.host, auth: !args.noAuth, tz: args.tz,
-      demo: args.demo ?? args.dev,
+      demo: args.demo ?? args.dev, noCache: args.noCache,
     });
   } catch (err) {
     console.error(err.message);

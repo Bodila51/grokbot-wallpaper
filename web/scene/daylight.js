@@ -170,7 +170,7 @@ export function createDaylight({ scene, renderer, container }) {
   // bright limb and the atmosphere's glow above it; the same ellipse masks the stars (scene.css .hq-stars).
   function backgroundString(p) {
     return `radial-gradient(50% 42% at 50% 46%, ${css(p.glow, p.glowA)}, ${css(p.glow, 0)} 75%), `
-      + `radial-gradient(110% 95% at 50% 130%, ${css(p.earth0)} 0%, ${css(p.earth1)} 78%, ${css(p.earth2)} 97%, `
+      + `radial-gradient(110% 95% at 50% 155%, ${css(p.earth0)} 0%, ${css(p.earth1)} 78%, ${css(p.earth2)} 97%, `
       + `${css(p.limb, p.limbA)} 99.3%, ${css(p.limb, p.limbA * 0.35)} 101%, ${css(p.limb, 0)} 109%), `
       + `linear-gradient(to bottom, ${css(p.space0)} 0%, ${css(p.space1)} 60%)`;
   }

@@ -1,5 +1,5 @@
 # runtime: journal, password, config (never commit)
-data/
+/data/
 node_modules/
 *.log
 
@@ -16,3 +16,6 @@ assets/_src/office/kenney/Side/
 
 # design prototypes (served locally at /_mock/)
 web/_mock/
+
+# Lively package built with the view key inside (lively/build.ps1)
+lively/dist/

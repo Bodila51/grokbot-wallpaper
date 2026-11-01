@@ -19,7 +19,7 @@ Each bot appends a line to `data/events.jsonl` (format: `docs/CONTRACT.md`, sect
 {"t":"2026-11-01T12:00:00+02:00","bot":"X Writer","group":"X-контент","status":"working","step":"пишу драфт поста","task":"Тред про AI-агентов"}
 ```
 
-As a desktop wallpaper (Lively, Windows): `docs/WALLPAPER.md`. Server details: `README-server.md`. Your own logo on the tower: `assets/brand/logo.png` (white on transparent).
+As a desktop wallpaper (Lively, Windows): `docs/WALLPAPER.md`; the Grok Bot wallpaper in one click: `lively/README.md`. Server details: `README-server.md`. Your own logo on the tower: `assets/brand/logo.png` (white on transparent).
 
 ## Credits
 

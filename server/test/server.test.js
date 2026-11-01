@@ -180,6 +180,15 @@ test('static files: MIME, caching, traversal and dotfiles refused, secrets never
   } finally { await s.close(); }
 });
 
+test('--no-cache: assets revalidate on every load (a local wallpaper picks up edited images)', async () => {
+  assert.equal(parseArgs(['--no-cache'], {}).noCache, true);
+  const s = await boot({ auth: false, noCache: true });
+  try {
+    const glb = await raw(s.port, { path: '/assets/blobs/x.glb' });
+    assert.equal(glb.headers['cache-control'], 'no-cache');
+  } finally { await s.close(); }
+});
+
 test('time alone changes the version: working bot turns stuck without any journal write', async () => {
   let now = Date.parse('2026-10-31T12:00:00+02:00');
   const s = await boot({ auth: false, now: () => now });

@@ -24,7 +24,7 @@ node server/server.js --dev      # http://127.0.0.1:8787
 
 ```
 node server/server.js [--dev] [--port 8787] [--host 127.0.0.1] [--journal path] [--no-auth]
-                      [--demo|--no-demo] [--tz Europe/Sofia] [--data-dir dir]
+                      [--demo|--no-demo] [--tz Europe/Sofia] [--data-dir dir] [--no-cache]
 ```
 
 | Flag | Meaning |
@@ -34,6 +34,7 @@ node server/server.js [--dev] [--port 8787] [--host 127.0.0.1] [--journal path] 
 | `--no-auth` | no password gate; refused unless `--host` is `127.0.0.1` / `localhost` / `::1` |
 | `--demo` / `--no-demo` | force the `demo` flag (otherwise: `--dev`, or the newest journal line carries `"demo":true`) |
 | `--tz` | timezone for output timestamps and "today" stats (default `Europe/Sofia`) |
+| `--no-cache` | `/assets/` answer `no-cache` instead of `max-age=3600`, so a reload shows edited images (the Lively autostart in `lively/` uses it) |
 
 Env (used by `start.sh` too): `BOTHQ_PASSWORD`, `BOTHQ_PORT`, `BOTHQ_HOST`, `BOTHQ_JOURNAL`, `BOTHQ_TZ`, `BOTHQ_TUNNEL=1`.
 

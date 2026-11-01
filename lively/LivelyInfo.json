@@ -1,0 +1,14 @@
+{
+  "AppVersion": "2.2.1.0",
+  "Title": "Grok Bot",
+  "Thumbnail": "preview.jpg",
+  "Preview": "preview.jpg",
+  "Desc": "Живые обои: шар Grok Bot следит глазами за курсором, карточки показывают ботов. Страница грузится с локального сервера Bot HQ, правки в репо видны после перезагрузки обоев.",
+  "Author": "Bot HQ",
+  "License": null,
+  "Contact": "https://github.com/Bodila51/grokbot-wallpaper",
+  "Type": 3,
+  "FileName": "http://127.0.0.1:8787/face/",
+  "Arguments": null,
+  "IsAbsolutePath": false
+}

@@ -5,7 +5,8 @@
 #
 # Env: BOTHQ_PORT (8787)  BOTHQ_HOST (127.0.0.1)  BOTHQ_JOURNAL  BOTHQ_PASSWORD  BOTHQ_TZ
 #      BOTHQ_TUNNEL=1  also start `cloudflared` and publish its https URL in data/tunnel-url.txt
-# The last line printed is the wallpaper link (…/?mode=wallpaper&key=<data/view-key.txt>) for Lively Wallpaper.
+# The last lines printed are the wallpaper links for Lively Wallpaper: …/face/?key=<data/view-key.txt> (Grok Bot face)
+# and …/?mode=wallpaper&key=… (the office).
 set -u
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -122,7 +123,8 @@ fi
 vkey=""
 [ -s "$DATA/view-key.txt" ] && vkey="$(tr -d '[:space:]' < "$DATA/view-key.txt")"
 if [ -n "$vkey" ]; then
-  echo "Ссылка для обоев: $base/?mode=wallpaper&key=$vkey"
+  echo "Ссылка для обоев (офис): $base/?mode=wallpaper&key=$vkey"
+  echo "Ссылка для обоев (Grok Bot): $base/face/?key=$vkey"
 else
   echo "Ссылка для обоев: $base/?mode=wallpaper  (ключа нет: data/view-key.txt создаётся при старте сервера; перезапусти ./stop.sh && ./start.sh)"
 fi
