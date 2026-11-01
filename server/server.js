@@ -7,7 +7,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { Journal } from './journal.js';
 import { StateStore } from './state.js';
-import { Auth, loadCredentials, loginPage, safeNext, sessionCookie, clearCookie } from './auth.js';
+import { Auth, loadCredentials, loadViewKey, loginPage, safeNext, sessionCookie, clearCookie } from './auth.js';
 import { createStatic } from './static.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -102,13 +102,26 @@ export function createApp(opts = {}) {
   if (!useAuth && !LOOPBACK_HOSTS.has(host)) throw new Error('--no-auth is only allowed with --host 127.0.0.1');
 
   const journalPath = opts.journalPath || path.join(dataDir, 'events.jsonl');
-  const store = new StateStore({ now: opts.now, tz: opts.tz, demo: !!opts.demo });
+  // Which hand-made blobs exist (assets/blobs/<id>.glb), re-read at most every 5 s: lets the browser skip GLB probes that would 404.
+  const blobDir = path.join(root, 'assets', 'blobs');
+  let glbIds = null, glbAt = 0;
+  const hasAvatar = (id) => {
+    const t = Date.now();
+    if (!glbIds || t - glbAt > 5000) {
+      try { glbIds = new Set(fs.readdirSync(blobDir).filter((f) => f.endsWith('.glb')).map((f) => f.slice(0, -4))); } catch { glbIds = new Set(); }
+      glbAt = t;
+    }
+    return glbIds.has(id);
+  };
+  const store = new StateStore({ now: opts.now, tz: opts.tz, demo: !!opts.demo, hasAvatar });
 
   let creds = null;
   let auth = null;
+  let viewKey = null;
   if (useAuth) {
     creds = opts.credentials || loadCredentials({ dataDir });
-    auth = new Auth({ password: creds.password, secret: creds.secret, now: opts.now });
+    viewKey = opts.viewKey ? { key: opts.viewKey, generated: false, file: null } : loadViewKey({ dataDir });
+    auth = new Auth({ password: creds.password, secret: creds.secret, viewKey: viewKey.key, now: opts.now });
   }
 
   const statics = createStatic([
@@ -236,6 +249,14 @@ export function createApp(opts = {}) {
     return redirect(res, 303, next, { 'Set-Cookie': sessionCookie(auth.issue(), { secure }) });
   }
 
+  // ---------- view-only key (wallpaper links) ----------
+
+  /** The query string without any `key=` pair; every other pair stays byte-for-byte as the client sent it. */
+  function queryWithoutKey(search) {
+    const kept = search.replace(/^\?/, '').split('&').filter((kv) => kv && !/^key(=|$)/.test(kv));
+    return kept.length ? `?${kept.join('&')}` : '';
+  }
+
   // ---------- routing ----------
 
   async function onRequest(req, res) {
@@ -248,6 +269,15 @@ export function createApp(opts = {}) {
     const p = url.pathname;
 
     if (p === '/healthz') return send(res, 200, 'text/plain; charset=utf-8', 'ok', { 'Cache-Control': 'no-store' });
+
+    // ?key=<view key> on any page: same session cookie as a password login, then the same URL without the key.
+    // A wrong key is ignored (falls through to the normal gate / login page). Never for the API.
+    if (useAuth && url.searchParams.has('key') && p !== '/logout' && !p.startsWith('/api/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      if (auth.checkViewKey(url.searchParams.get('key'))) {
+        return redirect(res, 302, safeNext(p + queryWithoutKey(url.search)), { 'Set-Cookie': sessionCookie(auth.issue(), { secure: isHttps(req) }) });
+      }
+    }
+
     if (p === '/login') return handleLogin(req, res, url);
     if (p === '/logout') {
       return redirect(res, 302, useAuth ? '/login' : '/', useAuth ? { 'Set-Cookie': clearCookie({ secure: isHttps(req) }) } : {});
@@ -255,7 +285,7 @@ export function createApp(opts = {}) {
 
     if (useAuth && !auth.isAuthed(req)) {
       if (p.startsWith('/api/')) return sendJson(res, 401, { error: 'unauthorized' });
-      return redirect(res, 302, `/login?next=${encodeURIComponent(safeNext(p + url.search))}`);
+      return redirect(res, 302, `/login?next=${encodeURIComponent(safeNext(p + queryWithoutKey(url.search)))}`);
     }
 
     if (p === '/api/state') return handleState(req, res, url);
@@ -278,6 +308,7 @@ export function createApp(opts = {}) {
 
   return {
     server, store, journal, auth, creds, journalPath, dataDir,
+    viewKey: viewKey ? viewKey.key : null,
     start({ port = 8787 } = {}) {
       journal.start({ watch: opts.watch !== false });
       store.commit();
@@ -339,6 +370,7 @@ async function main() {
   console.log(`Bot HQ listening on http://${shown}:${addr.port}`);
   console.log(`journal: ${app.journalPath}`);
   console.log(`auth: ${args.noAuth ? 'OFF (loopback only)' : `on, password from ${app.creds.source}`}`);
+  if (app.viewKey) console.log(`wallpaper view key: ${path.join(dataDir, 'view-key.txt')}`);
   if (app.creds?.generated) {
     console.log('----------------------------------------------');
     console.log(`NEW PASSWORD (saved to ${path.join(dataDir, 'password.txt')}): ${app.creds.password}`);

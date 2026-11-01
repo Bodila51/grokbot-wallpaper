@@ -55,12 +55,34 @@ export function loadCredentials({ dataDir, env = process.env }) {
   return { password, secret, generated, source };
 }
 
+/**
+ * View-only key for wallpaper links (Lively cannot type a password): data/view-key.txt, random hex, generated once.
+ * A request for any page with ?key=<this key> gets the normal session cookie (see Auth.checkViewKey + server.js).
+ * Anything already in the file that is shorter than 32 chars or not URL-safe is replaced.
+ */
+export function loadViewKey({ dataDir }) {
+  fs.mkdirSync(dataDir, { recursive: true });
+  const file = path.join(dataDir, 'view-key.txt');
+  let key = '';
+  try {
+    key = fs.readFileSync(file, 'utf8').trim();
+  } catch { /* not there yet */ }
+  let generated = false;
+  if (key.length < 32 || key.length > 200 || !/^[A-Za-z0-9_-]+$/.test(key)) {
+    key = crypto.randomBytes(24).toString('hex'); // 48 hex chars
+    writeSecret(file, key);
+    generated = true;
+  }
+  return { key, generated, file };
+}
+
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest();
 const b64u = (buf) => Buffer.from(buf).toString('base64url');
 
 export class Auth {
-  constructor({ password, secret, now = Date.now }) {
+  constructor({ password, secret, viewKey = '', now = Date.now }) {
     this.pwDigest = sha(password);
+    this.viewDigest = viewKey ? sha(viewKey) : null; // null = view keys disabled
     // Changing the password invalidates every existing session.
     this.key = crypto.createHmac('sha256', secret).update(password).digest();
     this.now = now;
@@ -71,6 +93,12 @@ export class Auth {
 
   checkPassword(input) {
     return crypto.timingSafeEqual(sha(String(input ?? '').trim()), this.pwDigest);
+  }
+
+  /** Constant-time check of a wallpaper view key (digests, so length differences do not leak either). */
+  checkViewKey(input) {
+    if (!this.viewDigest || typeof input !== 'string' || !input) return false;
+    return crypto.timingSafeEqual(sha(input.trim()), this.viewDigest);
   }
 
   issue(ttlMs = SESSION_TTL_MS) {
@@ -156,7 +184,7 @@ export function loginPage({ error = '', next = '/' } = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <meta name="robots" content="noindex">
-<title>Bot HQ — вход</title>
+<title>Grok Bot Wallpaper — вход</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
@@ -189,7 +217,7 @@ button:focus-visible{outline:3px solid rgba(20,20,20,.25);outline-offset:2px}
 <body>
 <main>
   <div class="blob" aria-hidden="true"><i></i><i></i></div>
-  <h1>Bot HQ</h1>
+  <h1>Grok Bot Wallpaper</h1>
   <p>Введи пароль, чтобы войти в офис.</p>
   ${error ? `<div class="err" role="alert">${esc(error)}</div>` : ''}
   <form method="post" action="/login" autocomplete="on">

@@ -17,7 +17,8 @@ node server/server.js --dev      # http://127.0.0.1:8787
 ```
 
 `start.sh` writes `data/server.pid`, logs to `data/server.log`, and forwards extra arguments to the server
-(`./start.sh --dev`). On the first start it prints the generated password.
+(`./start.sh --dev`). On the first start it prints the generated password. Its last line is the wallpaper link
+(`<tunnel URL if any, else local URL>/?mode=wallpaper&key=<view key>`), see `docs/WALLPAPER.md`.
 
 ### Flags
 
@@ -42,6 +43,7 @@ Env (used by `start.sh` too): `BOTHQ_PASSWORD`, `BOTHQ_PORT`, `BOTHQ_HOST`, `BOT
 |---|---|
 | `GET /api/state[?since=N]` | full state, or `{"version":N,"unchanged":true}`; gzip if accepted, `no-store` |
 | `GET /` , `/app.js`, ... | static `web/` (revalidated with ETag) |
+| `GET <any page>?key=<view key>` | same session cookie as a password login, then `302` to the same URL without `key` (other query pairs untouched). Wrong key: ignored, normal login redirect. Not for `/api/*` |
 | `GET /assets/...` | static `assets/` (`Cache-Control: public, max-age=3600`, `.glb` = `model/gltf-binary`) |
 | `GET/POST /login`, `/logout` | password form (Russian), session cookie |
 | `GET /healthz` | `ok`, no auth (used by `start.sh`) |
@@ -60,6 +62,7 @@ server/demo.js     demo event generator for the 15 demo bots
 server/test/       node:test suites
 data/              runtime only, never commit:
   events.jsonl       dev journal          password.txt   generated once (or env BOTHQ_PASSWORD)
+  view-key.txt       wallpaper view-only key, generated once (48 hex chars); delete it + restart to rotate
   secret.key         cookie HMAC secret   server.pid / server.log / tunnel.pid / tunnel.log / tunnel-url.txt
   floors.json        optional floor mapping     bots.json   optional per-bot overrides
 ```
@@ -70,6 +73,11 @@ data/              runtime only, never commit:
 ```json
 {"X Writer": {"floor": "x-content", "chat_url": "grokbot://app/v1/agent?id=...", "avatar": "x-writer", "color": "#2F6BFF"}}
 ```
+Optional `look` per bot (generated avatar, see `docs/AVATARS.md`): `{"look": {"shape": "hexagon", "color": "#1E86FC", "accessory": "glasses"}}`.
+Validated field by field: unknown shape -> `null`, colour must be `#RRGGBB` (else `null`), unknown accessory -> `none`;
+a look with neither a usable shape nor a usable colour becomes `null`. Served as `bots[id].look`; when no explicit
+`color` is set, `look.color` also becomes the bot colour. `bots[id].has_glb` tells the browser whether
+`assets/blobs/<avatar>.glb` exists, so it never probes (and 404s) for hand-made models that are not there.
 `data/floors.json` - bot -> floor, optionally with floor names and order. Either form works:
 ```json
 {"X Writer": "x-content", "Some Bot": "Новый отдел"}
@@ -99,6 +107,14 @@ when `x-forwarded-proto: https` (cloudflared sets it), signed with `data/secret.
 changing the password logs everyone out. Login is limited to 6 failures per 10 minutes per client IP
 (behind the tunnel the IP comes from `cf-connecting-ip`). Dotfiles and anything outside `web/` / `assets/`
 are never served. Keep the server on `127.0.0.1` and publish it only through the tunnel.
+
+### View-only key (wallpaper links)
+
+Lively Wallpaper cannot type a password, so `data/view-key.txt` holds a random key (at least 32 chars, generated on
+the first start with auth on). Opening any page with `?key=<key>` signs the browser in exactly like the login form
+(same HttpOnly session cookie, 30 days; `Secure` behind the https tunnel) and redirects to the same URL without the
+key, so it does not stay in the address bar. The comparison is constant-time. The key opens the dashboard
+(read-only, the app has no write endpoints); treat the link like a password. Rotate: delete the file and restart.
 
 ## Installing cloudflared (for `BOTHQ_TUNNEL=1`)
 

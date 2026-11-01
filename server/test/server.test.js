@@ -195,3 +195,28 @@ test('time alone changes the version: working bot turns stuck without any journa
     assert.equal(b.version, a.version + 1);
   } finally { await s.close(); }
 });
+
+test('data/bots.json look is served in /api/state and hot-reloaded', async () => {
+  const s = await boot({ auth: false });
+  try {
+    const get = async () => JSON.parse((await raw(s.port, { path: '/api/state' })).body);
+    assert.equal((await get()).bots['x-writer'].look, null);
+    fs.writeFileSync(path.join(s.root, 'data', 'bots.json'), JSON.stringify({
+      'X Writer': { look: { shape: 'pill', color: '#F59A1B', accessory: 'antenna' } },
+    }));
+    let st = null;
+    for (let i = 0; i < 40 && !st?.bots['x-writer'].look; i++) {
+      await new Promise((res) => setTimeout(res, 100));
+      st = await get();
+    }
+    assert.deepEqual(st.bots['x-writer'].look, { shape: 'pill', color: '#F59A1B', accessory: 'antenna' });
+    assert.equal(st.bots['x-writer'].avatar, 'x-writer', 'the hand-made avatar lookup is untouched');
+    assert.equal(st.bots['x-writer'].has_glb, false, 'no assets/blobs/x-writer.glb in this fixture');
+    fs.writeFileSync(path.join(s.root, 'data', 'bots.json'), JSON.stringify({ 'X Writer': { avatar: 'x' } }));
+    for (let i = 0; i < 40 && st.bots['x-writer'].avatar !== 'x'; i++) {
+      await new Promise((res) => setTimeout(res, 100));
+      st = await get();
+    }
+    assert.equal(st.bots['x-writer'].has_glb, true, 'avatar override points at assets/blobs/x.glb, which exists');
+  } finally { await s.close(); }
+});

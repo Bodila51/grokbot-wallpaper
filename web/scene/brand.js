@@ -3,7 +3,7 @@
 // at assets/brand/logo.png (white on transparent), else the text BRAND. Each user can drop in their own logo file.
 import * as THREE from 'three';
 
-const BRAND = 'BOT HQ';
+const BRAND = 'GROK BOT WALLPAPER';
 const FONT = 'Michroma';
 const BAND = { x0: -7.0, y: -2.58, h: 0.95, z: 6.24, maxW: 8.2 };   // +Z face (slab edge z = 6.2)
 

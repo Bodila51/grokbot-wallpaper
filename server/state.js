@@ -58,6 +58,36 @@ export function normalizeStatus(raw, hasStep, previous) {
 }
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+const HEX6 = /^#[0-9a-f]{6}$/i;
+
+// Generated avatars (docs/AVATARS.md). Closed vocabularies: keep in sync with web/scene/looks.js (a test compares them).
+export const LOOK_SHAPES = [
+  'sphere', 'rounded_cube', 'pill', 'triangle', 'cone', 'pentagon',
+  'hexagon', 'star4', 'star6', 'clover', 'rounded_square', 'trio',
+];
+export const LOOK_ACCESSORIES = ['none', 'glasses', 'stem', 'antenna', 'bow'];
+
+/**
+ * bots.json `look`: { shape, color, accessory }. Each field is validated on its own: unknown shape -> null,
+ * colour must be #RRGGBB (else null), unknown accessory -> 'none'. A look with neither a usable shape nor a
+ * usable colour carries no information and becomes null (the browser then derives both from the bot id).
+ */
+export function normLook(v) {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  let shape = null;
+  if (typeof v.shape === 'string') {
+    const s = v.shape.trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (LOOK_SHAPES.includes(s)) shape = s;
+  }
+  const color = typeof v.color === 'string' && HEX6.test(v.color.trim()) ? v.color.trim().toUpperCase() : null;
+  let accessory = 'none';
+  if (typeof v.accessory === 'string') {
+    const a = v.accessory.trim().toLowerCase();
+    if (LOOK_ACCESSORIES.includes(a)) accessory = a;
+  }
+  if (!shape && !color) return null;
+  return { shape, color, accessory };
+}
 const BAD_SCHEME = /^\s*(javascript|data|vbscript|file):/i;
 
 function normBotsCfg(obj) {
@@ -70,6 +100,8 @@ function normBotsCfg(obj) {
     if (typeof v.chat_url === 'string' && v.chat_url.trim() && !BAD_SCHEME.test(v.chat_url)) e.chat_url = v.chat_url.trim();
     if (typeof v.avatar === 'string' && /^[\w.-]{1,64}$/.test(v.avatar)) e.avatar = v.avatar;
     if (typeof v.color === 'string' && HEX.test(v.color.trim())) e.color = v.color.trim().toUpperCase();
+    const look = normLook(v.look);
+    if (look) e.look = look;
     map.set(botIdFor(key), e);
   }
   return map;
@@ -104,11 +136,14 @@ export class StateStore {
    * @param {() => number} [opts.now] clock (ms)
    * @param {string} [opts.tz] IANA zone for timestamps and "today" (default Europe/Sofia)
    * @param {boolean} [opts.demo] force the demo flag
+   * @param {(avatarId: string) => boolean} [opts.hasAvatar] does assets/blobs/<id>.glb exist? Adds bots[id].has_glb so the
+   *   browser can skip probing (and 404-ing) for hand-made models that are not there
    */
   constructor(opts = {}) {
     this.now = opts.now || Date.now;
     this.time = makeTime(opts.tz || 'Europe/Sofia');
     this.demoFlag = !!opts.demo;
+    this.hasAvatar = typeof opts.hasAvatar === 'function' ? opts.hasAvatar : null;
     this.lastEventDemo = false;
     this.version = opts.version ?? Math.floor(this.now() / 1000); // unique per process start, so a restart never reuses a client's `since`
     this.dirty = false;
@@ -481,7 +516,9 @@ export class StateStore {
         usage_share: pct !== undefined && total ? Math.round(Math.min(1, Math.max(0, pct / total)) * 1000) / 1000 : null,
         chat_url: cfg.chat_url ?? null,
         avatar: cfg.avatar ?? bot.id,
-        color: cfg.color ?? DEMO_COLORS[bot.id] ?? hashColor(bot.id),
+        color: cfg.color ?? cfg.look?.color ?? DEMO_COLORS[bot.id] ?? hashColor(bot.id),
+        look: cfg.look ?? null,
+        ...(this.hasAvatar ? { has_glb: !!this.hasAvatar(cfg.avatar ?? bot.id) } : {}),
         today: {
           working_min: this.workMinutes(bot, now, day),
           events: bucket?.events ?? 0,

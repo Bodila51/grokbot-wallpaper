@@ -322,7 +322,7 @@ function buildTopbar(root) {
   const clock = h('span', { class: 'bhq-num bhq-clock', text: '--:--' });
   const brand = h('div', { class: 'bhq-brand bhq-glass' },
     h('span', { class: 'bhq-mark', 'aria-hidden': 'true' }, h('i')),
-    h('b', { class: 'bhq-word', text: 'Bot HQ' }),
+    h('b', { class: 'bhq-word', text: 'Grok Bot Wallpaper' }),
     h('span', { class: 'bhq-sep', 'aria-hidden': 'true' }),
     h('span', { class: 'bhq-live' }, h('i', { class: 'bhq-dot bhq-live-dot', 'aria-hidden': 'true' }), 'Live · ', clock));
 

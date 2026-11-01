@@ -13,3 +13,6 @@ assets/_src/office/bake2/
 assets/_src/office/kenney/*.zip
 assets/_src/office/kenney/Isometric/
 assets/_src/office/kenney/Side/
+
+# design prototypes (served locally at /_mock/)
+web/_mock/

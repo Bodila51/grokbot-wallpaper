@@ -166,3 +166,45 @@ body {
 @media (max-width: 1100px) {
   #feed { display: none; }
 }
+
+/* ---------- wallpaper mode (?mode=wallpaper, app.js adds html.wallpaper; status line = web/wallpaper.js) ----------
+   The office alone: no panels (they are never built), no pointer cursor games, no in-scene tags unless &tags=1,
+   and no always-on CSS animation, so the page only draws what the 30 fps render loop asks for. */
+
+html.wallpaper, html.wallpaper * { cursor: default !important; -webkit-user-select: none; user-select: none; }
+html.wallpaper .hq-labels { display: none; }
+html.wallpaper.wp-tags .hq-labels { display: block; }
+html.wallpaper .hq-stars { animation: none; }
+
+.wp-status {
+  position: fixed; z-index: 20; top: 24px; right: 28px;
+  display: flex; align-items: center; gap: 0; max-width: calc(100vw - 56px);
+  padding: 9px 16px 9px 13px; border-radius: 999px;
+  font: 500 14px/1 var(--font); letter-spacing: -.003em; white-space: nowrap;
+  color: var(--muted);
+  background: var(--glass); border: 1px solid var(--glass-edge);
+  -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur);
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .05), 0 8px 24px var(--glass-shadow);
+  pointer-events: none;
+}
+.wp-status[hidden], .wp-seg[hidden] { display: none; }
+.wp-seg { display: inline-flex; align-items: center; gap: 0; }
+/* a dot between two visible segments */
+.wp-seg:not([hidden]) ~ .wp-seg:not([hidden])::before {
+  content: ""; width: 3px; height: 3px; margin: 0 10px; border-radius: 50%; background: currentColor; opacity: .45;
+}
+.wp-dot { width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--idle); flex: none; }
+.wp-num { font-weight: 650; font-variant-numeric: tabular-nums; color: var(--ink); margin-right: 0; }
+.wp-seg > span { margin-left: .3em; }
+.wp-working .wp-dot { background: var(--working); box-shadow: 0 0 0 3px color-mix(in srgb, var(--working) 22%, transparent); }
+.wp-attention { color: var(--alert-ink); }
+.wp-attention .wp-num { color: var(--alert-strong); }
+.wp-attention .wp-dot { background: var(--waiting); box-shadow: 0 0 0 3px color-mix(in srgb, var(--waiting) 24%, transparent); }
+.wp-error { color: var(--ink-error); }
+.wp-error .wp-num { color: var(--ink-error); }
+.wp-error .wp-dot { background: var(--error); box-shadow: 0 0 0 3px color-mix(in srgb, var(--error) 22%, transparent); }
+.wp-rest { color: var(--muted); }
+
+@media (prefers-reduced-transparency: reduce) {
+  .wp-status { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}

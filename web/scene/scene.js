@@ -10,7 +10,8 @@ import { createDaylight } from './daylight.js';
 import { createSky } from './sky.js';
 import { createWordmark } from './brand.js';
 import { createPost, tiltShiftEnabled } from './post.js';
-import { Actor, hash } from './actor.js';
+import { Actor } from './actor.js';
+import { generateBlob } from './blobgen.js';
 import { Spring, clamp } from './spring.js';
 import { sofiaHour, fontsPromise } from './walls.js';
 
@@ -49,9 +50,15 @@ let introDone = false, switchedAt = 0, nowSec = 0, settledOnce = false;
 let loadingEl = null;
 // Debug/test switches: ?floor=<id> forces the active floor, ?from=<id> starts there first, ?intro=0 skips the load
 // animation, ?hold=<s> fast-forwards that long after the (last) switch and freezes time, ?cam=x,z,zoom snaps the camera.
+// Wallpaper mode (?mode=wallpaper, for Lively): no panel offset, hover only (no pan / zoom / select), <= 30 fps, no
+// in-scene tags unless &tags=1. app.js owns ?floor= there (pin / cycle), so the scene's own debug switch is off.
+const WALLPAPER = new URLSearchParams(location.search).get('mode') === 'wallpaper';
+const WALLPAPER_TAGS = new URLSearchParams(location.search).get('tags') === '1';
+const WALLPAPER_FRAME_MS = 1000 / 30;
+const WALLPAPER_FRAMING = 0.9;                        // < 1 = closer: the side panels' space is not needed, so the tower fills more
 const TEST = (() => {
   const q = new URLSearchParams(location.search);
-  return { floor: q.get('floor'), from: q.get('from'), intro: q.get('intro'), hold: q.has('hold') ? Number(q.get('hold')) : null, cam: q.get('cam'), cursor: q.get('cursor') };
+  return { floor: WALLPAPER ? null : q.get('floor'), from: q.get('from'), intro: q.get('intro'), hold: q.has('hold') ? Number(q.get('hold')) : null, cam: q.get('cam'), cursor: q.get('cursor') };
 })();
 let frozen = false, pinCursor = false;
 
@@ -217,13 +224,25 @@ function assignLounge(bots) {
   return map;
 }
 
+// Avatar chain (docs/AVATARS.md): 1. hand-made GLB assets/blobs/<avatar>.glb, 2. generated blob from bot.look
+// (shape / colour / accessory written by Grok Bot from a screenshot), 3. generated blob from a hash of the id.
+// A look that changes later (data/bots.json is hot-reloaded) re-dresses the actor on the next state poll.
 function attachModel(actor, bot) {
-  const avatar = bot.avatar || bot.id;
-  loadModel(avatar).then((m) => {
-    if (actor.dead) return;
-    if (m) return actor.setModel(m.clone(true));
-    return loadModel('_default').then((d) => { if (d && !actor.dead) actor.setModel(d.clone(true), bot.color || hashColor(bot.id)); });
-  });
+  let current = null;
+  const apply = (b) => {
+    const key = `${b.avatar || b.id}|${b.color || ''}|${JSON.stringify(b.look || null)}`;
+    if (key === current) return;
+    current = key;
+    (b.has_glb === false ? Promise.resolve(null) : loadModel(b.avatar || b.id)).then((m) => {   // has_glb: server knows the file is missing, no probe
+      if (actor.dead || current !== key) return;
+      if (m) return actor.setModel(m.clone(true));
+      const look = b.look || {};
+      actor.setModel(generateBlob({ shape: look.shape, color: look.color || b.color, accessory: look.accessory, seed: b.id }));
+    });
+  };
+  apply(bot);
+  const update = actor.update.bind(actor);
+  actor.update = (b, spot, view) => { apply(b); return update(b, spot, view); };
 }
 
 function loadModel(id) {
@@ -233,10 +252,6 @@ function loadModel(id) {
       .catch(() => null));
   }
   return models.get(id);
-}
-
-function hashColor(id) {
-  return new THREE.Color().setHSL((hash(id) % 360) / 360, 0.65, 0.58).getStyle();
 }
 
 // ---------- floor switch = elevator ride ----------
@@ -312,11 +327,11 @@ function resize() {
   labels.setSize(w, h);
   post?.setSize(w, h);
   const aspect = w / h;
-  const halfH = Math.max(VIEW_SPAN.h, VIEW_SPAN.w / aspect) / 2;
+  const halfH = Math.max(VIEW_SPAN.h, VIEW_SPAN.w / aspect) / 2 * (WALLPAPER ? WALLPAPER_FRAMING : 1);
   camera.left = -halfH * aspect; camera.right = halfH * aspect;
   camera.top = halfH; camera.bottom = -halfH;
   // keep the building clear of the glass panels: shift the view so its centre is the free space between them
-  const shift = clamp((w - 900) / 600, 0, 1) * (UI_RIGHT - UI_LEFT) / 2;
+  const shift = WALLPAPER ? 0 : clamp((w - 900) / 600, 0, 1) * (UI_RIGHT - UI_LEFT) / 2;   // wallpaper: no panels, centred
   if (shift > 0.5) camera.setViewOffset(w, h, shift, 0, w, h); else camera.clearViewOffset();
   camera.updateProjectionMatrix();
 }
@@ -329,6 +344,7 @@ function addPointerHandlers() {
   const el = renderer.domElement;
   el.addEventListener('pointermove', onMove);
   el.addEventListener('pointerleave', () => { cursor.active = false; setHover(null); });
+  if (WALLPAPER) return;                              // a desktop background: bots follow the cursor, nothing else
   el.addEventListener('pointerdown', onDown);
   el.addEventListener('pointerup', onUp);
   el.addEventListener('pointercancel', (e) => { touches.delete(e.pointerId); drag = null; pinch = null; });
@@ -477,8 +493,16 @@ function updateCursorGround() {
 
 const focusV = new THREE.Vector3();
 
-function frame() {
+let lastDraw = 0;
+
+function frame(t) {
   if (document.hidden) { clock.getDelta(); return; }       // no work in a background tab
+  if (WALLPAPER) {                                          // <= 30 fps: skip the in-between vsyncs; dt keeps real time
+    const since = t - lastDraw;
+    if (since < WALLPAPER_FRAME_MS - 2) return;
+    lastDraw += Math.max(1, Math.round(since / WALLPAPER_FRAME_MS)) * WALLPAPER_FRAME_MS;  // stay on the 33 ms grid (100+ Hz displays)
+    if (t - lastDraw > WALLPAPER_FRAME_MS / 2) lastDraw = t;                                // fell behind (hidden, hitch): resync, no bursts
+  }
   const dt = frozen ? 0 : Math.min(clock.getDelta(), 0.05);
   if (frozen) clock.getDelta();
   nowSec = clock.elapsedTime;
@@ -504,5 +528,5 @@ function frame() {
     focusV.set(0, (building ? building.cabinY.x : 0) + 0.7, 0).project(camera);
     post.render(clamp(focusV.y * 0.5 + 0.5, 0, 1), dt, clamp(1.5 / camera.zoom, 0.25, 1));
   } else renderer.render(scene, camera);
-  labels.render(scene, camera);
+  if (!WALLPAPER || WALLPAPER_TAGS) labels.render(scene, camera);
 }

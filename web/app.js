@@ -8,8 +8,15 @@ let state = null;
 let ui = { initUI() {}, renderUI() {} };
 let demoTimer = null;
 
+// Wallpaper mode (?mode=wallpaper, for Lively): office full screen + one status line, no interaction except hover.
+//   &floor=<id>   pin the floor (default: the floor with the most bots)
+//   &cycle=<sec>  go to the next floor every <sec> seconds through the normal elevator switch
+const params = new URLSearchParams(location.search);
+const WALLPAPER = params.get('mode') === 'wallpaper';
+if (WALLPAPER) document.documentElement.classList.add('wallpaper');
+
 try {
-  ui = await import('./ui/ui.js');
+  ui = await import(WALLPAPER ? './wallpaper.js' : './ui/ui.js');
 } catch (err) {
   console.warn('[app] UI module not available yet:', err.message);
 }
@@ -44,16 +51,32 @@ function setFloor(id, keepSelection = false) {
   if (!state?.floors.some((f) => f.id === id)) return;
   view.currentFloor = id;
   if (!keepSelection) view.selectedBot = null;
-  try { localStorage.setItem('bothq.floor', id); } catch {}
+  if (!WALLPAPER) { try { localStorage.setItem('bothq.floor', id); } catch {} }
   zoom('reset');
   render();
 }
 
 function pickDefaultFloor() {
+  const fullest = () => [...state.floors].sort((a, b) => b.bots.length - a.bots.length)[0]?.id ?? null;
+  if (WALLPAPER) {
+    const pinned = params.get('floor');
+    return pinned && state.floors.some((f) => f.id === pinned) ? pinned : fullest();
+  }
   let saved = null;
   try { saved = localStorage.getItem('bothq.floor'); } catch {}
   if (saved && state.floors.some((f) => f.id === saved)) return saved;
-  return [...state.floors].sort((a, b) => b.bots.length - a.bots.length)[0]?.id ?? null;
+  return fullest();
+}
+
+// &cycle=<sec>: rotate through the floors (by `order`) with the usual elevator ride; paused while the page is hidden.
+const cycleSec = WALLPAPER ? Number(params.get('cycle')) : 0;
+if (cycleSec >= 5) {
+  setInterval(() => {
+    if (document.hidden || !state || state.floors.length < 2) return;
+    const floors = [...state.floors].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    const i = floors.findIndex((f) => f.id === view.currentFloor);
+    setFloor(floors[(i + 1) % floors.length].id);
+  }, cycleSec * 1000);
 }
 
 function render() {

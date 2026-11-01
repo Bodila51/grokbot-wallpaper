@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { StateStore, normalizeStatus, botIdFor, LIMITS } from '../state.js';
+import { StateStore, normalizeStatus, botIdFor, normLook, LOOK_SHAPES, LOOK_ACCESSORIES, LIMITS } from '../state.js';
+import { SHAPES, ACCESSORIES } from '../../web/scene/looks.js';
 import { slugify } from '../util.js';
 
 const T0 = Date.parse('2026-10-31T12:00:00+02:00');
@@ -309,4 +310,50 @@ test('demo flag: forced, or taken from the latest event', () => {
   assert.equal(b.store.snapshot().demo, true);
   b.ev('A', 'working', 'y');
   assert.equal(b.store.snapshot().demo, false);
+});
+
+test('look: bots.json look reaches bots[id].look, validated field by field', () => {
+  const { store, ev } = make();
+  ev('Sky Bot', 'idle', null);
+  ev('Odd Bot', 'idle', null);
+  ev('Bad Bot', 'idle', null);
+  ev('Plain Bot', 'idle', null);
+  store.setBotsConfig({
+    'Sky Bot': { look: { shape: 'hexagon', color: '#1e86fc', accessory: 'glasses' } },
+    'Odd Bot': { look: { shape: 'banana', color: 'red', accessory: 'hat' } },        // nothing usable
+    'Bad Bot': { look: { shape: 'Rounded Cube', color: '#abc', accessory: 'BOW' } }, // shape ok (normalised), 3-digit colour refused
+    'Plain Bot': { floor: 'Финансы' },
+  });
+  store.commit();
+  const b = store.snapshot().bots;
+  assert.deepEqual(b['sky-bot'].look, { shape: 'hexagon', color: '#1E86FC', accessory: 'glasses' });
+  assert.equal(b['sky-bot'].color, '#1E86FC', 'the bot colour follows look.color when no explicit colour is set');
+  assert.equal(b['odd-bot'].look, null, 'unknown shape + unusable colour carries no information');
+  assert.deepEqual(b['bad-bot'].look, { shape: 'rounded_cube', color: null, accessory: 'bow' });
+  assert.match(b['bad-bot'].color, /^#[0-9A-F]{6}$/, 'falls back to the hashed colour');
+  assert.equal(b['plain-bot'].look, null);
+  // an explicit colour wins over look.color for the bot colour; the look itself is untouched
+  store.setBotsConfig({ 'Sky Bot': { color: '#111111', look: { shape: 'star4', color: '#FF0000' } } });
+  const sky = store.snapshot().bots['sky-bot'];
+  assert.equal(sky.color, '#111111');
+  assert.deepEqual(sky.look, { shape: 'star4', color: '#FF0000', accessory: 'none' });
+});
+
+test('look: normLook edge cases', () => {
+  assert.equal(normLook(null), null);
+  assert.equal(normLook('hexagon'), null);
+  assert.equal(normLook([]), null);
+  assert.equal(normLook({}), null);
+  assert.equal(normLook({ accessory: 'bow' }), null);
+  assert.deepEqual(normLook({ shape: 'banana', color: '#00ff00' }), { shape: null, color: '#00FF00', accessory: 'none' });
+  assert.deepEqual(normLook({ shape: ' STAR-4 '.replace('-', ''), color: ' #0c0c0e ' }), { shape: 'star4', color: '#0C0C0E', accessory: 'none' });
+  assert.equal(normLook({ shape: 'sphere', color: 'javascript:alert(1)' }).color, null);
+  assert.equal(normLook({ shape: 42, color: 42 }), null);
+});
+
+test('look: the server vocabulary matches the one the browser uses', () => {
+  assert.deepEqual(LOOK_SHAPES, SHAPES);
+  assert.deepEqual(LOOK_ACCESSORIES, ACCESSORIES);
+  assert.equal(SHAPES.length, 12);
+  for (const sh of SHAPES) assert.equal(normLook({ shape: sh }).shape, sh);
 });

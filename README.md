@@ -1,6 +1,6 @@
-# Bot HQ
+# Grok Bot Wallpaper
 
-A live 3D office for your Grok Bot bots: every bot is a glossy blob at a desk on the top floor of an endless tower,
+Live wallpaper and dashboard for your Grok Bot bots (an independent project, not affiliated with the makers of Grok Bot): a 3D office where every bot is a glossy blob at a desk on the top floor of an endless tower,
 and you see in real time who is working, who is stuck and who is waiting for you. No AI at runtime: bots append one
 line per step to a journal, a tiny Node server tails it, the browser renders the office.
 
@@ -19,7 +19,7 @@ Each bot appends a line to `data/events.jsonl` (format: `docs/CONTRACT.md`, sect
 {"t":"2026-11-01T12:00:00+02:00","bot":"X Writer","group":"X-контент","status":"working","step":"пишу драфт поста","task":"Тред про AI-агентов"}
 ```
 
-Server details: `README-server.md`. Your own logo on the tower: `assets/brand/logo.png` (white on transparent).
+As a desktop wallpaper (Lively, Windows): `docs/WALLPAPER.md`. Server details: `README-server.md`. Your own logo on the tower: `assets/brand/logo.png` (white on transparent).
 
 ## Credits
 

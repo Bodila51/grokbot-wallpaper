@@ -294,3 +294,32 @@ Budget: GLB ≤ 6 MB, night JPGs ≤ 2 MB total, ≤ 150k triangles.
 - Task board: one card per bot on the floor (attention first, then working, then the rest; max 8 + "+N"):
   bot colour stripe, bot name, task title (fallback: step), status dot.
 - Everything degrades gracefully: missing GLB → procedural placeholder that follows this same contract.
+
+## v2.6 Generated avatars (blobs from a screenshot)
+Product rule from v2 made concrete: any user's bots get a blob without Blender.
+- **Input:** the user sends their Grok Bot a screenshot of the bot list; Grok Bot (vision) writes one entry per bot
+  into `data/bots.json`: `"<bot name>": {"look": {"shape": "...", "color": "#RRGGBB", "accessory": "..."}}`.
+  Exact prompt and format: `docs/AVATARS.md`.
+- **Vocabularies (closed):** shape = `sphere, rounded_cube, pill, triangle, cone, pentagon, hexagon, star4, star6, clover,
+  rounded_square, trio`; accessory = `none, glasses, stem, antenna, bow`. Single source of truth in the browser:
+  `web/scene/looks.js`; the server keeps a copy in `server/state.js` and a test compares the two.
+- **State (§4 addition):** `bots[id].look` = `{shape, color, accessory}` or `null`. Validation is per field: unknown
+  shape -> `null`, colour must be `#RRGGBB` (else `null`), unknown accessory -> `"none"`; a look with neither a usable
+  shape nor a usable colour is `null`. Without an explicit `color`, `look.color` also becomes `bots[id].color`.
+  `bots[id].has_glb` (bool, optional) = `assets/blobs/<avatar>.glb` exists on the server; absent on older servers.
+- **Avatar chain in `scene.js attachModel`:** (1) hand-made `assets/blobs/<avatar>.glb` (skipped when `has_glb` is
+  `false`), else (2) `generateBlob(bot.look)`, else (3) `generateBlob` with shape and colour derived from the bot id
+  (`bot.color` is the hashed colour from the server). A look that changes later (bots.json is hot-reloaded) re-dresses
+  the bot on the next poll. `assets/blobs/_default.glb` is no longer used by the scene.
+- **`web/scene/blobgen.js`:** `generateBlob({ shape, color, accessory, seed })` returns the §7 structure (root `blob`;
+  `body`, `eye_L`, `eye_R`, optional `extra`), same recipe as `assets/_src/blobs/build_blobs.py` (inflated slab from a
+  polar outline, round bevel, white vertical-oval eyes, jelly PBR: roughness 0.3, clearcoat 1). Deterministic per
+  (shape, colour, accessory, seed); the seed only picks a small tilt (-8..+8 deg). Geometry is cached per
+  shape + tilt + accessory, materials per colour. <= 6000 triangles per blob. `trio` has three bodies (one mesh, three
+  materials: the colour, a companion hue, a dark tone) and three eye pairs: the front pair is `eye_L`/`eye_R`, the others
+  `eye_L_2`, `eye_R_2`, `eye_L_3`, `eye_R_3` (actor.js matches `/^eye_[LR]/`, so they blink and glance together).
+  The `extra` mesh reports a bounding box that overhangs the body by at most 5 cm, so an antenna does not make its
+  blob smaller than its neighbours when actor.js fits the model to 1 m.
+- **Review page:** `web/scene/blobgen.html` (served at `/scene/blobgen.html`): every shape x colour, accessories, the
+  hash fallback, the 15 demo bots (hand-made GLB next to the generated one, looks in `web/data/demo-looks.json`),
+  an office-scale strip and a self-test (triangle budget, GLB structure, determinism).
