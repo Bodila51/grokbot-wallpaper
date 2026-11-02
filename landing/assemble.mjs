@@ -65,4 +65,10 @@ if (fs.existsSync(promptFile)) {
   const text = (fenced ? fenced[1] : md).trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   fs.writeFileSync(page, fs.readFileSync(page, 'utf8').replace(/<!-- PROMPT[^>]*-->/, () => text));
 }
+// The X Player Card at embed/: landing/embed.html around the wallpaper's own body (web/face/index.html), so the card
+// always runs the current wallpaper. It sits next to face/, so the body's ../assets paths stay right.
+const faceBody = fs.readFileSync(path.join(repo, 'web/face/index.html'), 'utf8').match(/<body>([\s\S]*)<\/body>/)[1];
+fs.mkdirSync(path.join(out, 'embed'), { recursive: true });
+fs.writeFileSync(path.join(out, 'embed', 'index.html'), fs.readFileSync(path.join(repo, 'landing/embed.html'), 'utf8')
+  .replace(/<!-- FACE[^>]*-->/, () => faceBody.trim().replace('src="./face.js"', 'src="../face/face.js"')));
 console.log(`assembled ${total} files into ${out}`);
