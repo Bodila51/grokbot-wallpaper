@@ -356,6 +356,7 @@ test('look: normLook edge cases', () => {
 test('look: the server vocabulary matches the one the browser uses', () => {
   assert.deepEqual(LOOK_SHAPES, SHAPES);
   assert.deepEqual(LOOK_ACCESSORIES, ACCESSORIES);
-  assert.equal(SHAPES.length, 12);
+  assert.equal(SHAPES.length, 16, '13 app shapes + rounded_cube, cone, trio');
+  for (const sh of ['cloud', 'bubble', 'flower', 'drop']) assert.ok(SHAPES.includes(sh), sh);
   for (const sh of SHAPES) assert.equal(normLook({ shape: sh }).shape, sh);
 });

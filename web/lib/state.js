@@ -64,9 +64,12 @@ const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
 const HEX6 = /^#?[0-9a-f]{6}$/i;                    // look colours: the leading # is optional (Grok Bot sometimes drops it)
 
 // Generated avatars (docs/AVATARS.md). Closed vocabularies: keep in sync with web/scene/looks.js (a test compares them).
+// The Grok Bot app's avatar picker (its 14th avatar is sphere + stem), then three older ids kept for old looks.
 export const LOOK_SHAPES = [
-  'sphere', 'rounded_cube', 'pill', 'triangle', 'cone', 'pentagon',
-  'hexagon', 'star4', 'star6', 'clover', 'rounded_square', 'trio',
+  'sphere', 'cloud', 'rounded_square', 'star4', 'clover',
+  'bubble', 'flower', 'drop', 'pill', 'triangle',
+  'pentagon', 'star6', 'hexagon',
+  'rounded_cube', 'cone', 'trio',
 ];
 export const LOOK_ACCESSORIES = ['none', 'glasses', 'stem', 'antenna', 'bow'];
 

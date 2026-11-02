@@ -71,6 +71,12 @@
   </div>
 </header>
 <main>
+  <section id="sec-app">
+    <h2>Как в приложении Grok Bot</h2>
+    <p class="hint">14 аватаров из выбора аватара в приложении, в том же порядке (14-й: круг с черенком). Сверху 3D-блоб спереди, снизу картинка для панелей из <code>assets/blobs/lib</code>.</p>
+    <div class="grid" id="app"></div>
+  </section>
+
   <section id="sec-shapes">
     <h2>Формы и цвета</h2>
     <p class="hint">12 форм из закрытого списка. Чёрный проверяет, что глянец читается и на тёмном.</p>
@@ -116,11 +122,11 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { generateBlob, SHAPES, ACCESSORIES, PALETTE } from './blobgen.js';
-import { hashShape, hash32 } from './looks.js';
+import { hashShape, hash32, APP_SHAPES } from './looks.js';
 
 const DPR = Math.min(window.devicePixelRatio || 1, 2);
-const SHOW_COLORS = ['#FD690F', '#1E86FC', '#F93498', '#14C16F', '#FFC21A', '#0C0C0E'];
-const SHAPE_NAMES = { sphere: 'круг', rounded_cube: 'куб', pill: 'таблетка', triangle: 'треугольник', cone: 'конус', pentagon: 'пятиугольник', hexagon: 'шестиугольник', star4: 'звезда 4', star6: 'звезда 6', clover: 'клевер', rounded_square: 'квадрат', trio: 'трио' };
+const SHOW_COLORS = ['#FD690F', '#1E86FC', '#F93498', '#14C16F', '#F59312', '#000000', '#959595'];
+const SHAPE_NAMES = { cloud: 'облако', bubble: 'пузырь', flower: 'цветок', drop: 'капля', sphere: 'круг', rounded_cube: 'куб', pill: 'таблетка', triangle: 'треугольник', cone: 'конус', pentagon: 'пятиугольник', hexagon: 'шестиугольник', star4: 'звезда 4', star6: 'звезда 6', clover: 'клевер', rounded_square: 'квадрат', trio: 'трио' };
 const ACC_NAMES = { none: 'без', glasses: 'очки', stem: 'черенок', antenna: 'антенна', bow: 'бант' };
 const qs = new URLSearchParams(location.search);
 const state = { view: qs.get('view') || 'iso', seed: qs.get('seed') || 'demo' };
@@ -171,8 +177,8 @@ const VIEWS = {
 };
 
 /** draw `items` [{model, x}] (x = metres along the screen's right axis) into a 2D canvas */
-function draw(canvas, items, { w, h, ppm, fixed = false }) {
-  const v = VIEWS[state.view];
+function draw(canvas, items, { w, h, ppm, fixed = false, view = null }) {
+  const v = VIEWS[view || state.view];
   canvas.width = Math.round(w * DPR); canvas.height = Math.round(h * DPR);
   if (fixed) { canvas.style.width = `${w}px`; canvas.style.height = `${h}px`; }
   renderer.setPixelRatio(1);
@@ -207,11 +213,12 @@ function draw(canvas, items, { w, h, ppm, fixed = false }) {
 
 // ---------- cells ----------
 const jobs = [];                                   // re-drawn when the view or the seed changes
-function cell(parent, { title, sub, color, make, size = 150, ppm = 90 }) {
+function cell(parent, { title, sub, color, make, size = 150, ppm = 90, view = null, thumb = null }) {
   const el = document.createElement('div');
   el.className = 'cell';
   const cv = document.createElement('canvas');
   el.append(cv);
+  if (thumb) { const im = new Image(); im.src = thumb; im.alt = ''; im.style.cssText = 'display:block;width:64%;margin:0 auto'; el.append(im); }
   if (title) { const b = document.createElement('b'); b.textContent = title; el.append(b); }
   const sm = document.createElement('small');
   el.append(sm);
@@ -220,7 +227,7 @@ function cell(parent, { title, sub, color, make, size = 150, ppm = 90 }) {
     const model = await make();
     const tris = model.userData?.tris;
     sm.innerHTML = (color ? `<i class="sw" style="background:${color}"></i>` : '') + (sub || '') + (tris ? ` · ${tris}△` : '');
-    draw(cv, [{ model: fit(model) }], { w: Math.round(size * SCALE), h: Math.round(size * SCALE), ppm: ppm * SCALE });
+    draw(cv, [{ model: fit(model) }], { w: Math.round(size * SCALE), h: Math.round(size * SCALE), ppm: ppm * SCALE, view });
   };
   jobs.push(job);
   return el;
@@ -231,6 +238,15 @@ function loadGLB(id) {
 }
 const glbCache = new Map();
 const glb = (id) => { if (!glbCache.has(id)) glbCache.set(id, loadGLB(id)); return glbCache.get(id).then((s) => s && s.clone(true)); };
+
+// 0. the app's picker: 14 avatars in its order, front view, + the panel thumbnail
+{
+  const root = document.getElementById('app');
+  root.style.gridTemplateColumns = 'repeat(5, minmax(0, 170px))';
+  const APP = [...APP_SHAPES.map((sh) => [sh, 'none']), ['sphere', 'stem']];
+  APP.forEach(([sh, acc], i) => cell(root, { title: `${i + 1} · ${sh}${acc !== 'none' ? ' + ' + acc : ''}`, view: 'front', size: 170, ppm: 120,
+    thumb: `../../assets/blobs/lib/${acc === 'stem' ? 'sphere_stem' : sh}-FD690F.png`, make: async () => generateBlob({ shape: sh, color: '#FD690F', accessory: acc, seed: 'app' }) }));
+}
 
 // 1. shapes x colours
 {

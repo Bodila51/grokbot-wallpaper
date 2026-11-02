@@ -10,6 +10,7 @@
 // meshes. Everything is deterministic: same input, same blob.
 import * as THREE from 'three';
 import { SHAPES, ACCESSORIES, normShape, normAccessory, normColor, hash32, hashShape } from './looks.js';
+import { makeOutline, toPolar, csmooth } from './outlines.js';
 
 export { SHAPES, ACCESSORIES };
 
@@ -41,105 +42,6 @@ function alignTo(n) {
 const norm3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
 const lerp = (a, b, t) => a + (b - a) * t;
 
-// ---------------------------------------------------------------- 2D outlines (all CCW, kernel point at the origin)
-
-function sup(a, b, n, N = 720) {
-  const pts = [];
-  for (let i = 0; i < N; i++) {
-    const t = (2 * Math.PI * i) / N, c = Math.cos(t), s = Math.sin(t);
-    const r = (Math.abs(c / a) ** n + Math.abs(s / b) ** n) ** (-1 / n);
-    pts.push([r * c, r * s]);
-  }
-  return pts;
-}
-
-function regPoly(n, R, rotDeg) {
-  const pts = [];
-  for (let k = 0; k < n; k++) pts.push([R * Math.cos(rad(rotDeg + (360 * k) / n)), R * Math.sin(rad(rotDeg + (360 * k) / n))]);
-  return pts;
-}
-
-/** convex CCW core polygon offset by rr -> rounded polygon */
-function roundedPoly(core, rr, arc = 24) {
-  const n = core.length, nor = [];
-  for (let i = 0; i < n; i++) {
-    const e = [core[(i + 1) % n][0] - core[i][0], core[(i + 1) % n][1] - core[i][1]];
-    const l = Math.hypot(e[0], e[1]);
-    nor.push([e[1] / l, -e[0] / l]);
-  }
-  const pts = [];
-  for (let i = 0; i < n; i++) {
-    const p = nor[(i + n - 1) % n];
-    const a0 = Math.atan2(p[1], p[0]);
-    let a1 = Math.atan2(nor[i][1], nor[i][0]);
-    while (a1 < a0) a1 += 2 * Math.PI;
-    for (let k = 0; k < arc; k++) {
-      const t = lerp(a0, a1, k / (arc - 1));
-      pts.push([core[i][0] + rr * Math.cos(t), core[i][1] + rr * Math.sin(t)]);
-    }
-  }
-  return pts;
-}
-
-/** k-pointed soft star (also flowers): r = rin + (1-rin) * ((1+cos(k(t-tip)))/2)^p */
-function star(k, rin, p, tipDeg, N = 1440) {
-  const pts = [];
-  for (let i = 0; i < N; i++) {
-    const t = (2 * Math.PI * i) / N;
-    const g = ((1 + Math.cos(k * (t - rad(tipDeg)))) / 2) ** p;
-    const r = rin + (1 - rin) * g;
-    pts.push([r * Math.cos(t), r * Math.sin(t)]);
-  }
-  return pts;
-}
-
-function rotPts(pts, deg) {
-  const c = Math.cos(rad(deg)), s = Math.sin(rad(deg));
-  return pts.map(([x, y]) => [x * c - y * s, x * s + y * c]);
-}
-
-function makeOutline(o) {
-  let pts;
-  if (o.kind === 'sup') pts = sup(o.a, o.b, o.n);
-  else if (o.kind === 'star') pts = star(o.k, o.rin, o.p, o.tip);
-  else if (o.kind === 'poly') {
-    pts = roundedPoly(regPoly(o.n, o.R - o.rr, o.rot ?? 90), o.rr);
-    if (o.sy) pts = pts.map(([x, y]) => [x, y * o.sy]);
-  } else throw new Error(`outline ${o.kind}`);
-  return o.rotate ? rotPts(pts, o.rotate) : pts;
-}
-
-/** radius of a star-shaped closed polyline along N rays from `centre` */
-function toPolar(pts, N, centre = [0, 0]) {
-  const M = pts.length, out = new Float64Array(N);
-  for (let i = 0; i < N; i++) {
-    const th = (2 * Math.PI * i) / N, dx = Math.cos(th), dy = Math.sin(th);
-    let best = 0;
-    for (let k = 0; k < M; k++) {
-      const Px = pts[k][0] - centre[0], Py = pts[k][1] - centre[1];
-      const q = pts[(k + 1) % M];
-      const ex = q[0] - centre[0] - Px, ey = q[1] - centre[1] - Py;
-      const den = dx * ey - dy * ex;
-      if (Math.abs(den) < 1e-12) continue;
-      const t = (Px * ey - Py * ex) / den, s = (Px * dy - Py * dx) / den;
-      if (s >= -1e-9 && s <= 1 + 1e-9 && t > best) best = t;
-    }
-    out[i] = best;
-  }
-  return out;
-}
-
-function csmooth(a, passes = 1) {
-  const N = a.length;
-  let cur = Float64Array.from(a);
-  for (let p = 0; p < passes; p++) {
-    const nxt = new Float64Array(N);
-    for (let i = 0; i < N; i++) nxt[i] = 0.25 * cur[(i + N - 1) % N] + 0.5 * cur[i] + 0.25 * cur[(i + 1) % N];
-    cur = nxt;
-  }
-  return cur;
-}
-
 // ---------------------------------------------------------------- bodies
 // A body answers: emit() -> {V, F} closed mesh, zAt(x, y) front surface height, nAt(x, y) front normal,
 // rimAt(theta) silhouette point seen from `centre`, plus `D` (its size) for scaling accessories.
@@ -152,7 +54,7 @@ class Slab {
     this.D = D;
     this.th = Float64Array.from({ length: N }, (_, i) => (2 * Math.PI * i) / N);
     const pts = makeOutline(def.outline);
-    let r = csmooth(toPolar(pts, N), 1);
+    let r = csmooth(toPolar(pts, N), def.smooth ?? 1);         // traced (fourier) outlines are smooth already
     const xs = [], ys = [];
     for (let i = 0; i < N; i++) { xs.push(r[i] * Math.cos(this.th[i])); ys.push(r[i] * Math.sin(this.th[i])); }
     const ext = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
@@ -164,6 +66,12 @@ class Slab {
     this.wall = (def.wall ?? 0) * this.T;
     const bevel = def.bevel ?? 0.92;
     this.W = csmooth(this.r.map((v) => Math.min(bevel * this.T, 0.85 * v)), 3);
+    if (def.inner) {
+      // deep notches (flower, cloud): the face rings get a smoother outline than the rim, else every notch draws a
+      // crease from the rim to the middle of the face. The bevel then widens in the notches and the rim stays exact.
+      const inner = csmooth(this.r.map((v, k) => v - this.W[k]), def.inner);
+      this.W = this.W.map((w, k) => this.r[k] - Math.min(inner[k], this.r[k] - 0.35 * w));
+    }
     this.centre = [0, 0];
   }
 
@@ -293,24 +201,48 @@ function frontNormal(body, x, y) {
   return norm3([-dzdx, -dzdy, 1]);
 }
 
-// ---------------------------------------------------------------- the 12 shapes
-// face: c = face centre (units of D from the body origin), sp = eye spacing, w/h = eye size (units of D),
-//       pair = angle of the line through both eyes (deg, CCW), tilt = tilt of each oval (deg).
+// ---------------------------------------------------------------- the shapes
+// The 14 avatars of the Grok Bot app's picker (13 shapes; the 14th is sphere + stem), traced from the app itself:
+// each outline was fitted to the picker's silhouette (area overlap 0.95-0.99), each face to its eyes (centre, spacing,
+// slant), at the app's own angle. Convex ones are hulls of circles (straight sides, own corner radii); the organic
+// ones are Fourier series of the traced radius. rounded_cube, cone and trio are older ids that the app no longer
+// shows: still drawn, so old looks keep working.
+// face: c = face centre (units of D from the outline's area centre), sp = eye spacing, w/h = eye size (units of D),
+//       pair = angle of the line through both eyes (deg, CCW), tilt = slant of each oval (deg, CCW).
 
 const POLY = (n, rr, rot, extra = {}) => ({ kind: 'poly', n, R: 1, rr, rot, ...extra });
+const APP_EYES = (c, sp, h, pair, tilt) => ({ c, sp, w: +(h / 2.6).toFixed(3), h, pair, tilt });   // the app's slim slanted ovals
+
+const TRACED = {
+  cloud: [0.4644, -0.0013, 0.0016, 0.0344, 0.0162, 0.0252, -0.0051, -0.0056, -0.0039, 0.0193, -0.0015, 0.0026, -0.0043, -0.0025, 0.0049, -0.0053, 0.0015],
+  star4: [0.4131, 0.0001, 0, -0.0003, -0.0167, -0.0002, -0.0002, 0.0736, 0.0341, -0.0002, -0.0001, 0.0002, 0.0022, -0.0004, 0, 0.0012, -0.0004, 0.0001, -0.0001, -0.0014, 0.0007, 0.0002, 0.0001, 0.0027, 0.0053],
+  clover: [0.4623, 0, 0, 0.0045, -0.0273, 0.0002, -0.0001, -0.0036, -0.0449, -0.0004, 0.0001, 0.0002, 0.0008, -0.0004, 0, 0.0105, -0.0056, 0, 0.0002, -0.002, 0.0005],
+  bubble: [0.4568, 0.0013, -0.0022, 0.0313, 0.0104, -0.0395, 0.0269, -0.0026, 0.0079, 0.0083, 0.002, 0.0007, 0.0027, -0.0027, -0.0001, 0.0007, -0.0011],
+  flower: [0.4574, 0, 0, 0.0025, -0.022, 0, 0, 0.0026, 0.0003, 0.0002, 0, 0.0207, -0.0284, 0, 0, 0.0046, 0.0035, -0.0001, -0.0003, 0.0023, -0.002, 0, 0.0001, 0.0014, 0.0062, -0.0001, 0.0001, -0.0023, 0.0006, 0.0003, -0.0002, 0, -0.0003, 0.0001, 0.0003, -0.003, -0.001, -0.0001, -0.0001, 0.0004, -0.0018],
+  star6: [0.4235, -0.0001, 0, 0.0048, -0.0394, 0, 0, -0.0051, -0.0014, 0.0004, -0.0001, 0.0417, -0.0574, 0.0004, 0.0002, 0.0021, 0.0032, -0.0001, -0.0001, -0.003, -0.0002, 0.0001, 0, 0.001, 0.0033, 0.0001, 0.0001, 0.0058, -0.0008, -0.0001, 0.0003, 0.0002, -0.0049, -0.0001, 0, -0.0006, 0],
+};
+const traced = (name) => ({ kind: 'fourier', c: TRACED[name] });
 
 const SHAPE_DEFS = {
-  sphere: { type: 'slab', outline: { kind: 'sup', a: 1, b: 0.97, n: 2 }, face: { c: [0.06, 0.06], sp: 0.25, w: 0.11, h: 0.25, pair: 12, tilt: 15 } },
+  // row 1 of the app's picker
+  sphere: { type: 'slab', outline: { kind: 'sup', a: 1, b: 1, n: 2 }, face: APP_EYES([0.17, 0.218], 0.26, 0.272, 25, 36) },
+  cloud: { type: 'slab', N: 96, smooth: 0, inner: 10, outline: traced('cloud'), face: APP_EYES([0.161, 0.15], 0.214, 0.236, 16, 28) },
+  rounded_square: { type: 'slab', outline: { kind: 'hull', circles: [[0.146, 0.381, 0.107], [-0.393, 0.195, 0.141], [-0.149, -0.383, 0.106], [0.397, -0.195, 0.139]] }, face: APP_EYES([0.08, 0.023], 0.18, 0.212, 16, 29) },
+  star4: { type: 'slab', N: 112, smooth: 0, depth: 0.3, bevel: 0.5, outline: traced('star4'), face: APP_EYES([0.076, 0.086], 0.186, 0.191, 16, 28) },
+  clover: { type: 'slab', N: 104, smooth: 0, inner: 10, outline: traced('clover'), face: APP_EYES([0.062, 0.081], 0.212, 0.212, 15, 28) },
+  // row 2
+  bubble: { type: 'slab', N: 96, smooth: 0, inner: 8, outline: traced('bubble'), face: APP_EYES([0.179, 0.087], 0.208, 0.214, 16, 24) },
+  flower: { type: 'slab', N: 108, smooth: 0, inner: 10, outline: traced('flower'), face: APP_EYES([0.107, 0.033], 0.179, 0.213, 15, 28) },
+  drop: { type: 'slab', outline: { kind: 'hull', circles: [[0.015, -0.031, 0.419], [-0.166, 0.34, 0.148]] }, face: APP_EYES([0.192, 0.145], 0.201, 0.227, 16, 27) },
+  pill: { type: 'slab', outline: { kind: 'hull', circles: [[0.149, 0.042, 0.339], [-0.148, -0.042, 0.34]] }, face: APP_EYES([0.144, 0.14], 0.267, 0.233, 15, 27) },
+  triangle: { type: 'slab', outline: { kind: 'hull', circles: [[0.723, -0.02, 0.185], [-0.23, 0.471, 0.319], [-0.222, -0.339, 0.41]] }, face: APP_EYES([0.145, 0.213], 0.201, 0.216, 12, 54) },
+  // row 3 (the 14th avatar is sphere + stem)
+  pentagon: { type: 'slab', outline: { kind: 'hull', circles: [[0.276, 0.325, 0.101], [-0.184, 0.425, 0.177], [-0.414, 0.049, 0.157], [-0.202, -0.411, 0.151], [0.41, -0.181, 0.211]] }, face: APP_EYES([0.075, 0.053], 0.203, 0.222, 15, 28) },
+  star6: { type: 'slab', N: 108, smooth: 0, depth: 0.3, bevel: 0.5, outline: traced('star6'), face: APP_EYES([0.092, 0.017], 0.189, 0.202, 16, 28) },
+  hexagon: { type: 'slab', outline: { kind: 'hull', circles: [[0.264, 0.33, 0.112], [-0.154, 0.4, 0.152], [-0.404, 0.073, 0.162], [-0.267, -0.334, 0.108], [0.153, -0.399, 0.153], [0.412, -0.073, 0.155]] }, face: APP_EYES([0.1, 0.029], 0.275, 0.274, 15, 28) },
+  // older ids, not in the app any more
   rounded_cube: { type: 'slab', outline: { ...POLY(4, 0.27, 45), rotate: 18 }, depth: 0.74, bevel: 0.62, wall: 0.5, face: { c: [0.04, 0.03], sp: 0.22, w: 0.1, h: 0.23, pair: 12, tilt: 25 } },
-  pill: { type: 'slab', outline: { kind: 'sup', a: 1, b: 0.66, n: 3.0, rotate: 6 }, face: { c: [0.07, 0.04], sp: 0.27, w: 0.1, h: 0.24, pair: 16, tilt: 22 } },
-  triangle: { type: 'slab', outline: POLY(3, 0.38, 90, { sy: 0.94 }), face: { c: [-0.02, -0.05], sp: 0.24, w: 0.11, h: 0.22, pair: 0, tilt: 0 } },
   cone: { type: 'lathe', face: { c: [0.0, 0.31], sp: 0.22, w: 0.105, h: 0.23, pair: 0, tilt: 0 } },
-  pentagon: { type: 'slab', outline: { ...POLY(5, 0.3, 90), rotate: -4 }, face: { c: [0.0, -0.02], sp: 0.25, w: 0.11, h: 0.24, pair: 8, tilt: 8 } },
-  hexagon: { type: 'slab', outline: { ...POLY(6, 0.3, 0), rotate: -5 }, face: { c: [0.04, -0.03], sp: 0.26, w: 0.11, h: 0.25, pair: 10, tilt: 4 } },
-  star4: { type: 'slab', N: 100, depth: 0.3, bevel: 0.5, outline: { kind: 'star', k: 4, rin: 0.58, p: 1.3, tip: -3 }, face: { c: [0.07, 0.08], sp: 0.2, w: 0.09, h: 0.22, pair: 12, tilt: 25 } },
-  star6: { type: 'slab', N: 108, depth: 0.3, bevel: 0.5, outline: { kind: 'star', k: 6, rin: 0.58, p: 1.1, tip: 90 }, face: { c: [0.0, -0.07], sp: 0.25, w: 0.115, h: 0.24, pair: 0, tilt: 0 } },
-  clover: { type: 'slab', N: 100, outline: { kind: 'star', k: 4, rin: 0.73, p: 0.9, tip: 65 }, face: { c: [0.06, 0.09], sp: 0.21, w: 0.1, h: 0.21, pair: 17, tilt: 20 } },
-  rounded_square: { type: 'slab', outline: POLY(4, 0.4, 45), face: { c: [0.0, 0.02], sp: 0.25, w: 0.1, h: 0.24, pair: 0, tilt: 0 } },
   trio: { type: 'trio' },
 };
 
@@ -418,11 +350,13 @@ function faceEyes(unit, accessory) {
 
 // ---------------------------------------------------------------- accessories (design coordinates, unrotated)
 
-function topPoint(body) {
+/** the rim point furthest up, or furthest along a direction leaned leanDeg to the left of up */
+function topPoint(body, leanDeg = 0) {
+  const dx = -Math.sin(rad(leanDeg)), dy = Math.cos(rad(leanDeg));
   let best = -Infinity, p = body.rimAt(Math.PI / 2);
   for (let i = 0; i < 180; i++) {
-    const q = body.rimAt((2 * Math.PI * i) / 180);
-    if (q[1] > best + 1e-9) { best = q[1]; p = q; }
+    const q = body.rimAt((2 * Math.PI * i) / 180), v = q[0] * dx + q[1] * dy;
+    if (v > best + 1e-9) { best = v; p = q; }
   }
   return p;
 }
@@ -433,11 +367,11 @@ function buildAccessory(kind, unit, eyes, accent) {
   const off = (p, z = 0) => [p[0] + at[0], p[1] + at[1], z + at[2]];
   const pieces = [];                                                   // {V, F, mat} mat 0 = dark, 1 = accent
   if (kind === 'stem') {
-    const top = topPoint(body);
-    const base = [top[0], top[1] - 0.05 * k, 0];
-    const P1 = [base[0] - 0.02 * k, base[1] + 0.115 * k, 0], P2 = [base[0] - 0.125 * k, base[1] + 0.205 * k, 0];
+    const top = topPoint(body, 20);                                  // the app's stem: top-left, short, leaning out
+    const base = [top[0] + 0.012 * k, top[1] - 0.045 * k, 0];
+    const P1 = [base[0] - 0.035 * k, base[1] + 0.09 * k, 0], P2 = [base[0] - 0.1 * k, base[1] + 0.155 * k, 0];
     const ts = Array.from({ length: 11 }, (_, i) => i / 10);
-    const t = tube(ts.map((u) => off(bez(base, P1, P2, u))), ts.map((u) => k * (0.05 - 0.016 * u)), 8);
+    const t = tube(ts.map((u) => off(bez(base, P1, P2, u))), ts.map((u) => k * (0.045 - 0.01 * u)), 8);
     pieces.push({ ...t, mat: 0 });
   } else if (kind === 'antenna') {
     const top = topPoint(body);
@@ -624,6 +558,15 @@ export function bodyTone(hex) {
   return L >= LIGHT_BODY ? 'light' : L < DARK_BODY ? 'dark' : 'mid';
 }
 
+// Eyes: 'dark' on a near-white body; 'bright' (white that stays white in shade) on a grey body, where only lightness
+// separates the eyes from the body (the app's gray, #959595, is as light as its orange); else the usual white.
+function eyeKind(hex) {
+  const tone = bodyTone(hex);
+  if (tone === 'light') return 'dark';
+  const s = new THREE.Color(hex).convertLinearToSRGB();
+  return tone === 'mid' && Math.max(s.r, s.g, s.b) - Math.min(s.r, s.g, s.b) < 0.12 ? 'bright' : 'white';
+}
+
 const bodyMats = new Map();
 function bodyMaterial(hex) {
   if (!bodyMats.has(hex)) bodyMats.set(hex, new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06 }));
@@ -631,11 +574,12 @@ function bodyMaterial(hex) {
 }
 
 const eyeMats = new Map();
-function eyeMaterial(dark = false) {
-  if (!eyeMats.has(dark)) eyeMats.set(dark, new THREE.MeshPhysicalMaterial(dark
+function eyeMaterial(kind = 'white') {
+  const glow = kind === 'bright' ? 0.42 : 0.1;
+  if (!eyeMats.has(kind)) eyeMats.set(kind, new THREE.MeshPhysicalMaterial(kind === 'dark'
     ? { color: '#141417', roughness: 0.2, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04 }
-    : { color: 0xffffff, roughness: 0.22, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.05, emissive: new THREE.Color().setRGB(0.1, 0.1, 0.1, THREE.LinearSRGBColorSpace) }));
-  return eyeMats.get(dark);
+    : { color: 0xffffff, roughness: 0.22, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.05, emissive: new THREE.Color().setRGB(glow, glow, glow, THREE.LinearSRGBColorSpace) }));
+  return eyeMats.get(kind);
 }
 
 const darkMats = new Map();
@@ -644,7 +588,7 @@ function darkMaterial(kind, onDark = false) {
   if (!darkMats.has(key)) darkMats.set(key, new THREE.MeshPhysicalMaterial(onDark
     ? (kind === 'glasses'
       ? { color: '#ECECEF', roughness: 0.32, clearcoat: 0.8, clearcoatRoughness: 0.05 }
-      : { color: '#B9BBC1', roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.06 })
+      : { color: '#8A8D93', roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.06 })
     : (kind === 'glasses'
       ? { color: '#101012', roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.06 }
       : { color: '#3A3D40', roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.06 })));
@@ -684,10 +628,12 @@ function trioColors(hex) {
 
 // ---------------------------------------------------------------- public API
 
-// A handful of lively colours for blobs nobody described (CONTRACT §8 palette).
-export const PALETTE = ['#FD690F', '#F93498', '#1E86FC', '#14C16F', '#F59312', '#FB2B3E', '#13B7A2', '#A06B39', '#1F8F4E', '#8A5CF6', '#0C0C0E'];
+// The Grok Bot app's 11 avatar colours, for blobs nobody described (the gray last: never picked by the hash).
+export const APP_COLORS = ['#000000', '#A06B39', '#FB2B3E', '#FD690F', '#F59312', '#14C16F', '#13B7A2', '#1E86FC', '#8F59F9', '#F93498', '#959595'];
+export const PALETTE = APP_COLORS.slice(0, 10);
 
-function tiltFor(seed) { return ((hash32(`tilt:${seed}`) >>> 5) % 5 - 2) * 4; }       // -8 .. +8 deg in 4 deg steps
+// The app draws every shape at one angle (already in its outline); the old per-bot random tilt is gone.
+function tiltFor() { return 0; }
 
 /**
  * @param {{shape?: string, color?: string, accessory?: string, seed?: string|number}} look
@@ -710,7 +656,7 @@ export function generateBlob({ shape, color, accessory, seed } = {}) {
   body.name = 'body';
   root.add(body);
   for (const e of parts.eyes) {
-    const m = new THREE.Mesh(e.geo, eyeMaterial(bodyTone(eyeColor(e.name)) === 'light'));
+    const m = new THREE.Mesh(e.geo, eyeMaterial(eyeKind(eyeColor(e.name))));
     m.name = e.name;
     m.position.set(e.pos[0], e.pos[1], e.pos[2]);
     root.add(m);

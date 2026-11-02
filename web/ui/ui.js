@@ -373,21 +373,26 @@ function setAvatar(av, bot, status) {
   }
 }
 
-// assets/blobs/lib (build_blobs.py --lib): every shape in 12 colours, so anyone's bot gets a 3D avatar
+// assets/blobs/lib (export_lib.mjs + build_blobs.py --lib-from): every shape in the Grok Bot app's 11 colours, so anyone's bot gets a 3D avatar
 const LIB_BASE = new URL('../../assets/blobs/lib/', import.meta.url).href;
-const LIB_SHAPES = ['sphere', 'rounded_cube', 'pill', 'triangle', 'cone', 'pentagon', 'hexagon', 'star4', 'star6', 'clover', 'rounded_square', 'trio'];
-const LIB_COLORS = ['FB2B3E', 'FD690F', 'F6A317', 'A8D52F', '1FAE63', '13B7A2', '1E86FC', '7B5CF2', 'F93498', 'A06B39', '0C0C0E', 'F3E7DB'];
+// The office's own blobs (web/scene/blobgen.js, traced from the Grok Bot app) in the app's 11 colours, rendered by
+// assets/_src/blobs/export_lib.mjs + build_blobs.py --lib-from. Shapes = web/scene/looks.js SHAPES (13 app shapes, then
+// 3 older ids), colours = the app's palette (blobgen APP_COLORS); sphere + stem has its own picture (the app's 14th).
+const LIB_SHAPES = ['sphere', 'cloud', 'rounded_square', 'star4', 'clover', 'bubble', 'flower', 'drop', 'pill', 'triangle', 'pentagon', 'star6', 'hexagon', 'rounded_cube', 'cone', 'trio'];
+const LIB_COLORS = ['000000', 'A06B39', 'FB2B3E', 'FD690F', 'F59312', '14C16F', '13B7A2', '1E86FC', '8F59F9', 'F93498', '959595'];
 function libThumb(bot) {
-  let h = 2166136261;
-  for (const ch of String(bot.id || bot.name || '')) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  const fnv = (s) => { let h = 2166136261; for (const ch of s) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0; return h; };
+  const id = String(bot.id || bot.name || '');
   const look = bot.look || {};
-  const shape = LIB_SHAPES.includes(look.shape) ? look.shape : LIB_SHAPES[h % LIB_SHAPES.length];
+  // nobody described it: the same shape as its blob in the office (looks.js hashShape picks among the 13 app shapes)
+  let shape = LIB_SHAPES.includes(look.shape) ? look.shape : LIB_SHAPES[(fnv(`shape:${id}`) >>> 4) % 13];
+  if (shape === 'sphere' && look.accessory === 'stem') shape = 'sphere_stem';
   const m = /^#([0-9a-f]{6})$/i.exec(look.color || bot.color || '');
-  let hex = LIB_COLORS[(h >>> 4) % LIB_COLORS.length];
-  if (m) {                                               // nearest by weighted RGB; greys go to near-black or near-white
+  let hex = LIB_COLORS[fnv(`color:${id}`) % 10];
+  if (m) {                                               // nearest by weighted RGB; greys go to the app's black or gray
     const rgb = (x) => [0, 2, 4].map((i) => parseInt(x.slice(i, i + 2), 16)), [r, g, b] = rgb(m[1]);
     let best = Infinity;
-    if (Math.max(r, g, b) - Math.min(r, g, b) < 28) { hex = LIB_COLORS[(r + g + b) / 3 < 128 ? 10 : 11]; best = 0; }
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 28) { hex = (r + g + b) / 3 < 75 ? '000000' : '959595'; best = 0; }
     for (const p of LIB_COLORS) {
       const [pr, pg, pb] = rgb(p), rm = (r + pr) / 2, d = (2 + rm / 256) * (r - pr) ** 2 + 4 * (g - pg) ** 2 + (3 - rm / 256) * (b - pb) ** 2;
       if (d < best) { best = d; hex = p; }

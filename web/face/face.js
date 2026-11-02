@@ -12,7 +12,7 @@ const STATUS = {
   idle: { text: 'resting', c: 'var(--idle)' },
 };
 const ORDER = ['waiting_user', 'error', 'stuck', 'working', 'done', 'idle'];
-const SHAPES = ['sphere', 'rounded_square', 'pill', 'triangle', 'pentagon', 'hexagon', 'star4', 'star6', 'clover', 'rounded_cube', 'cone', 'trio'];
+const SHAPES = ['sphere', 'rounded_square', 'pill', 'triangle', 'pentagon', 'hexagon', 'star4', 'star6', 'clover', 'rounded_cube', 'cone', 'trio', 'cloud', 'bubble', 'flower', 'drop'];
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 // ---------- the eyes: the original painted eyes as layers (assets/face/eyes.json), moved like Grok Bot's own animation ----------
@@ -247,18 +247,19 @@ function face3d(bot, look) {
   const id = bot.avatar || bot.id;
   return THUMBS.has(id) ? `<img src="../assets/blobs/thumbs/${id}.png" alt="" draggable="false">` : libFace(bot, look);
 }
-// Any other bot: the pre-rendered 3D library (assets/blobs/lib, made by build_blobs.py --lib) = its shape in the
-// nearest of 12 colours; the flat avatar() takes over if the PNG fails to load.
+// Any other bot: the pre-rendered 3D library (assets/blobs/lib, made by build_blobs.py --lib-from) = its shape in the
+// nearest of the Grok Bot app's 11 colours; the flat avatar() takes over if the PNG fails to load.
 function libFace(bot, look) {
-  const PAL = ['FB2B3E', 'FD690F', 'F6A317', 'A8D52F', '1FAE63', '13B7A2', '1E86FC', '7B5CF2', 'F93498', 'A06B39', '0C0C0E', 'F3E7DB']; // = LIB_COLORS
-  const shape = SHAPES.includes(look?.shape) ? look.shape : SHAPES[hash(bot.id) % SHAPES.length];
+  const PAL = ['000000', 'A06B39', 'FB2B3E', 'FD690F', 'F59312', '14C16F', '13B7A2', '1E86FC', '8F59F9', 'F93498', '959595']; // = ui.js LIB_COLORS
+  let shape = SHAPES.includes(look?.shape) ? look.shape : SHAPES[hash(bot.id) % SHAPES.length];
+  if (shape === 'sphere' && look?.accessory === 'stem') shape = 'sphere_stem';     // the app's 14th avatar
   const m = /^#([0-9a-f]{6})$/i.exec(look?.color || bot.color || '');
   const rgb = (h) => [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
   let hex = PAL[hash(bot.id + 'c') % PAL.length];
   if (m) {                                                           // nearest by the "redmean" weighted RGB distance
     const [r, g, b] = rgb(m[1]);
     let best = Infinity;
-    if (Math.max(r, g, b) - Math.min(r, g, b) < 28) { hex = PAL[(r + g + b) / 3 < 128 ? 10 : 11]; best = 0; }   // greys: near-black or near-white, never brown
+    if (Math.max(r, g, b) - Math.min(r, g, b) < 28) { hex = (r + g + b) / 3 < 75 ? '000000' : '959595'; best = 0; }   // greys: the app's black or gray, never brown
     for (const p of PAL) {
       const [pr, pg, pb] = rgb(p), rm = (r + pr) / 2, d = (2 + rm / 256) * (r - pr) ** 2 + 4 * (g - pg) ** 2 + (3 - rm / 256) * (b - pb) ** 2;
       if (d < best) { best = d; hex = p; }

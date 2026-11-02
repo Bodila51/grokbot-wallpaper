@@ -1,10 +1,14 @@
 // Closed vocabularies for generated blob avatars (docs/AVATARS.md). Pure data, no imports:
 // blobgen.js (browser) and the server-side tests share these lists, so they cannot drift apart silently.
 
-export const SHAPES = [
-  'sphere', 'rounded_cube', 'pill', 'triangle', 'cone', 'pentagon',
-  'hexagon', 'star4', 'star6', 'clover', 'rounded_square', 'trio',
+// The Grok Bot app's avatar picker, left to right, top to bottom (its 14th avatar is sphere + accessory stem),
+// then three older ids the app no longer shows, kept so that old looks still work.
+export const APP_SHAPES = [
+  'sphere', 'cloud', 'rounded_square', 'star4', 'clover',
+  'bubble', 'flower', 'drop', 'pill', 'triangle',
+  'pentagon', 'star6', 'hexagon',
 ];
+export const SHAPES = [...APP_SHAPES, 'rounded_cube', 'cone', 'trio'];
 
 export const ACCESSORIES = ['none', 'glasses', 'stem', 'antenna', 'bow'];
 
@@ -37,7 +41,7 @@ export function hash32(str) {
   return h >>> 0;
 }
 
-/** The shape a bot gets when nothing describes it: stable per id. */
+/** The shape a bot gets when nothing describes it: stable per id, always one the app has. */
 export function hashShape(id) {
-  return SHAPES[(hash32(`shape:${id}`) >>> 4) % SHAPES.length];
+  return APP_SHAPES[(hash32(`shape:${id}`) >>> 4) % APP_SHAPES.length];
 }

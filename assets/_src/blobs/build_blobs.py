@@ -3,13 +3,17 @@ Bot HQ blob generator  (Blender 5.x, headless)
 
     blender -b --factory-startup -P build_blobs.py -- [--only id1,id2] [--no-thumbs] [--no-glb]
     blender -b --factory-startup -P build_blobs.py -- --lib [--only shape1,shape2] [--lib-px 160] [--lib-samples 64]
+    blender -b --factory-startup -P build_blobs.py -- --lib-from <dir of GLBs from export_lib.mjs> [--lib-px 160]
 
 Builds every jelly blob in BLOBS from a data table and writes
     assets/blobs/<id>.glb            (root `blob` -> body, eye_L, eye_R, [extra])
     assets/blobs/thumbs/<id>.png     (256x256, transparent, Eevee)
 
-LIBRARY mode (--lib): same studio, material and eyes, but for ANY user's bots: every look shape x a fixed
-palette of LIB_COLORS, accessory none, rendered once and served as static files
+LIBRARY mode, the panels' pictures of ANY user's bots, rendered once and served as static files.
+--lib-from (current): export_lib.mjs saves every shape of web/scene/blobgen.js (the office's own generator, traced
+from the Grok Bot app's avatars) in the app's 11 colours as GLBs, and this script renders each one in the same studio,
+so the panels show exactly what the office shows. --lib (older): geometry from LIB_SPECS below, its first 12 shapes
+x LIB_COLORS, accessory none.
     assets/blobs/lib/<shape>-<RRGGBB>.png   (160x160, transparent)
     assets/blobs/lib/index.json             ({"shapes": [...], "colors": [...]}, the palette the web picks from)
 
@@ -41,6 +45,9 @@ DO_THUMBS = "--no-thumbs" not in argv
 DO_LIB = "--lib" in argv
 LIB_PX = int(argv[argv.index("--lib-px") + 1]) if "--lib-px" in argv else 160
 LIB_SAMPLES = int(argv[argv.index("--lib-samples") + 1]) if "--lib-samples" in argv else 64
+LIB_FROM = argv[argv.index("--lib-from") + 1] if "--lib-from" in argv else None
+if "--lib-out" in argv:                      # e.g. a scratch folder for a trial run
+    LIB_DIR = argv[argv.index("--lib-out") + 1]
 
 
 # ----------------------------------------------------------------------------- colour helpers
@@ -800,7 +807,41 @@ def lib_main():
     print("LIB DONE %.0fs" % (time.time() - t0))
 
 
+def lib_from_main():
+    """<key>-<RRGGBB>.glb from export_lib.mjs -> lib/<key>-<RRGGBB>.png, same studio and camera as every thumbnail"""
+    import glob, time
+    t0 = time.time()
+    os.makedirs(LIB_DIR, exist_ok=True)
+    for ob in list(bpy.data.objects):
+        bpy.data.objects.remove(ob, do_unlink=True)
+    co, lights = setup_studio()
+    sc = bpy.context.scene
+    sc.render.resolution_x = sc.render.resolution_y = LIB_PX
+    try:
+        sc.eevee.taa_render_samples = LIB_SAMPLES
+    except Exception:
+        pass
+    files = sorted(glob.glob(os.path.join(LIB_FROM, "*.glb")))
+    keys, colors = [], []
+    for f in files:
+        name = os.path.splitext(os.path.basename(f))[0]
+        key, hexcol = name.rsplit("-", 1)
+        if key not in keys:
+            keys.append(key)
+        if hexcol not in colors:
+            colors.append(hexcol)
+        clear_blob()
+        bpy.ops.import_scene.gltf(filepath=f)
+        pts = np.array([list(ob.matrix_world @ v.co) for ob in sc.objects if ob.type == "MESH" for v in ob.data.vertices])
+        render_thumb(co, lights, (pts.min(0), pts.max(0)), os.path.join(LIB_DIR, name + ".png"))
+    with open(os.path.join(LIB_DIR, "index.json"), "w") as fh:
+        json.dump({"shapes": keys, "colors": colors}, fh)
+    print("LIB-FROM %d thumbnails %.0fs" % (len(files), time.time() - t0))
+
+
 def main():
+    if LIB_FROM:
+        return lib_from_main()
     if DO_LIB:
         return lib_main()
     os.makedirs(THUMBS, exist_ok=True)
