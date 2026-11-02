@@ -91,6 +91,7 @@ export class WallDisplays {
     if (this.screen) this.screen.mat.toneMapped = false;
     this.sig = '';
     this.data = null;
+    this.accent = null;                                    // the floor's accent (floorstyle.js): a dot before its name
     this.lastDraw = -1e9;
     this.dirty = false;
     this.fontsAtDraw = false;
@@ -103,6 +104,22 @@ export class WallDisplays {
     const sig = this.signature(data);
     this.data = data;
     if (sig !== this.sig) { this.sig = sig; this.dirty = true; }
+  }
+
+  setAccent(hex) {
+    if (hex === this.accent) return;
+    this.accent = hex;
+    this.dirty = true;
+    this.lastDraw = -1e9;                                  // a floor switch: redraw on the next tick
+  }
+
+  // "<lead> ● <name>": the dot in the floor's accent instead of the middle dot. Returns the x where the name starts.
+  accentDot(g, lead, x, y, dotY, size) {
+    g.fillText(lead, x, y);
+    const lw = g.measureText(lead).width;
+    g.fillStyle = this.accent;
+    g.beginPath(); g.arc(x + lw + size * 1.3, dotY, size * 0.42, 0, 7); g.fill();
+    return x + lw + size * 2.6;
   }
 
   signature(d) {
@@ -121,7 +138,7 @@ export class WallDisplays {
       if (this.board) this.drawBoard(this.data);
     }
     if (this.screen) {
-      const k = 0.86 + 0.18 * night;                      // dim glass by day, glows at night
+      const k = 0.86 * (1 - 0.84 * night);                // dim glass by day, a near-black screen at night
       this.screen.mat.color.setRGB(k, k, k);
     }
     if (this.board) {
@@ -152,11 +169,11 @@ export class WallDisplays {
 
     g.textBaseline = 'alphabetic';
     g.fillStyle = '#8E8E93'; g.font = `500 32px ${FONT}`;
-    const lead = 'Today · ';
-    g.fillText(lead, 44, 62);
-    const lw = g.measureText(lead).width;
+    let nx;
+    if (this.accent) nx = this.accentDot(g, 'Today', 44, 62, 51, 20);
+    else { g.fillText('Today · ', 44, 62); nx = 44 + g.measureText('Today · ').width; }
     g.fillStyle = '#F5F5F7'; g.font = `650 40px ${FONT}`;
-    g.fillText(ellipsize(g, d.floorName || '', 700 - lw), 44 + lw, 62);
+    g.fillText(ellipsize(g, d.floorName || '', 744 - nx), nx, 62);
     // live dot
     g.fillStyle = '#34C759'; g.beginPath(); g.arc(W - 52, 50, 7, 0, 7); g.fill();
     g.fillStyle = 'rgba(52,199,89,0.25)'; g.beginPath(); g.arc(W - 52, 50, 14, 0, 7); g.fill();
@@ -212,10 +229,11 @@ export class WallDisplays {
     g.fillStyle = '#E3E0D9'; g.fillRect(0, 68, W, 2);
 
     g.fillStyle = '#1D1D1F'; g.font = `700 34px ${FONT}`;
-    g.fillText('Tasks', 36, 49);
-    const tw0 = g.measureText('Tasks ').width;
+    let nx;
+    if (this.accent) nx = this.accentDot(g, 'Tasks', 36, 49, 37, 20);
+    else { g.fillText('Tasks', 36, 49); nx = 36 + g.measureText('Tasks ').width; }
     g.fillStyle = '#6E6E73'; g.font = `600 26px ${FONT}`;
-    g.fillText(`· ${ellipsize(g, d.floorName || '', 420)}`, 36 + tw0, 49);
+    g.fillText(`${this.accent ? '' : '· '}${ellipsize(g, d.floorName || '', 420)}`, nx, 49);
 
     const sorted = [...d.bots].sort((a, b) => (RANK[a.effective_status || a.status] ?? 3) - (RANK[b.effective_status || b.status] ?? 3) || String(a.name).localeCompare(String(b.name)));
     const shown = sorted.slice(0, 8), extra = sorted.length - shown.length;

@@ -3,6 +3,7 @@
 // load fails, a procedural placeholder that follows the same contract is built in code.
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { buildFloorStyles } from './floorstyle.js';
 
 export const DESK_COUNT = 20;
 export const LOUNGE_COUNT = 6;
@@ -52,8 +53,16 @@ export async function loadOfficeAssets(baseUrl) {
   return finish(templates, spots, ph ? ph.nightMaps : new Map(), glb ? (missing.length ? 'glb+placeholder' : 'glb') : 'placeholder');
 }
 
+// Per-floor accent + lounge corners (floorstyle.js) are added to the template here, after the spots are read. They need
+// the GLB lounge; the placeholder floor keeps one look (style = null).
 function finish(templates, spots, nightMaps, source) {
-  return { templates, spots, nightMaps, source };
+  let style = null;
+  try {
+    if (new URLSearchParams(location.search).get('floorstyle') !== '0') style = buildFloorStyles(templates.floor_open, spots.lounges);   // test switch: ?floorstyle=0
+  } catch (err) {
+    console.warn('[office] floor styles skipped:', err.message);
+  }
+  return { templates, spots, nightMaps, source, style };
 }
 
 // Baked surfaces are unlit: day lightmap as a basic material (night map is mixed in by the instance patch).

@@ -115,6 +115,7 @@ export function initScene(el, cbs = {}) {
   officeAssets.then((a) => {
     assets = a;
     building = new Building({ scene, daylight, assets: a, baseUrl: `${ASSETS}/office`, renderer });
+    daylight.setBuilding(building);                        // sun stripes on the active floor, ambient tint of the baked surfaces
     a.spots.lounges.forEach((s) => { if (s) s.lounge = true; });
     window.bothq = Object.assign(window.bothq || {}, { source: a.source });
     resize();

@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { Spring, smoothstep } from './spring.js';
 import { FLOOR_STEP, SLAB, SHAFT_POS } from './office.js';
 import { WallDisplays } from './walls.js';
+import { floorStyles, applyFloorStyle, styleObjects, styleNightMaps } from './floorstyle.js';
 
 const LIFT = 20;                        // how far upper floors slide up, out of the frame (m)
 const SWAP_AT = 0.14;                   // s after a switch starts: blur peak, open/closed swap
@@ -121,6 +122,7 @@ export class Building {
 
     this.slots = [];                    // sorted by floor order
     this.byId = new Map();
+    this.styles = new Map();            // floor id -> { accent, layout } (floorstyle.js)
     this.activeIndex = -1;
     this.pool = [];                     // open-floor instances (max 2)
     this.sig = '';
@@ -184,24 +186,30 @@ export class Building {
     let rec = this.nightRecs.get(name);
     if (!rec) {
       const override = this.assets.nightMaps.get(name);
-      rec = { name, uMap: { value: override || mat.map }, uTint: { value: new THREE.Vector3(...(override ? [1, 1, 1] : NIGHT_TINT)) }, dayMap: mat.map, tex: null, state: override ? 'static' : 'idle', since: 0 };
+      const drawn = name.startsWith('style_');        // floorstyle.js patch / rugs: no night lightmap on disk, tinted day map
+      rec = { name, uMap: { value: override || mat.map }, uTint: { value: new THREE.Vector3(...(override ? [1, 1, 1] : NIGHT_TINT)) }, dayMap: mat.map, tex: null, state: override || drawn ? 'static' : 'idle', since: 0 };
       this.nightRecs.set(name, rec);
     }
     const { uMap, uTint } = rec;
+    // A floor's accent rug (floorstyle.js) carries its colour in its own uniform: daylight.js owns .color (ambient tint).
+    const accent = mat.userData.accent ? (mat.accentUniform = { value: new THREE.Color(1, 1, 1) }) : null;
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uNight = this.daylight.uNight;
       shader.uniforms.uNightMap = uMap;
       shader.uniforms.uNightTint = uTint;
+      if (accent) shader.uniforms.uAccent = accent;
       shader.fragmentShader = shader.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uNight;\nuniform sampler2D uNightMap;\nuniform vec3 uNightTint;')
+        .replace('#include <common>', `#include <common>\nuniform float uNight;\nuniform sampler2D uNightMap;\nuniform vec3 uNightTint;${accent ? '\nuniform vec3 uAccent;' : ''}`)
         .replace('#include <map_fragment>', `#ifdef USE_MAP
   vec4 dayC = texture2D( map, vMapUv );
   vec4 nightC = texture2D( uNightMap, vMapUv );
   nightC.rgb *= uNightTint;
   diffuseColor *= mix( dayC, nightC, uNight );
 #endif`);
+      // after color_fragment, so light that later patches add in front of it (sunpatch.js) is tinted too
+      if (accent) shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= uAccent;');
     };
-    mat.customProgramCacheKey = () => 'bothq-baked-night';
+    mat.customProgramCacheKey = () => (accent ? 'bothq-baked-night-accent' : 'bothq-baked-night');
   }
 
   updateNightMaps(nowMs) {
@@ -216,12 +224,26 @@ export class Building {
             if (!t) { rec.state = 'missing'; return; }
             if (rec.dayMap) { t.wrapS = rec.dayMap.wrapS; t.wrapT = rec.dayMap.wrapT; t.channel = rec.dayMap.channel; }
             rec.tex = t; rec.uMap.value = t; rec.uTint.value.set(1, 1, 1); rec.state = 'ready';
+            if (rec.name === 'baked_floor') this.styleNight(t.image);
           });
         }
       } else if (rec.state === 'ready' && nowMs - rec.since > 30000) {       // 30 s of full day: free the GPU memory
         rec.uMap.value = rec.dayMap; rec.uTint.value.set(...NIGHT_TINT);
         rec.tex.dispose(); rec.tex = null; rec.state = 'idle';
+        if (rec.name === 'baked_floor') this.styleNight(null);
       }
+    }
+  }
+
+  // The lounge corners' floor patch and rugs (floorstyle.js) follow the night floor's light: built from its lightmap
+  // when that loads, dropped again with it.
+  styleNight(img) {
+    const maps = img && this.assets.style ? styleNightMaps(img) : new Map();
+    for (const rec of this.nightRecs.values()) {
+      if (!rec.name.startsWith('style_')) continue;
+      if (rec.styleNight) { rec.styleNight.dispose(); rec.styleNight = null; }
+      const t = maps.get(rec.name);
+      if (t) { rec.styleNight = t; rec.uMap.value = t; rec.uTint.value.set(1, 1, 1); } else { rec.uMap.value = rec.dayMap; rec.uTint.value.set(...NIGHT_TINT); }
     }
   }
 
@@ -233,6 +255,7 @@ export class Building {
     list.forEach((f, i) => { const s = this.byId.get(f.id); if (s) { s.name = f.name; s.index = i; } });
     if (sig === this.sig) return;
     this.sig = sig;
+    this.styles = this.assets.style ? floorStyles(list) : new Map();
     const keep = new Map(list.map((f, i) => [f.id, i]));
     for (const s of this.slots) if (!keep.has(s.id)) this.disposeSlot(s);
     this.slots = list.map((f, i) => {
@@ -248,7 +271,23 @@ export class Building {
     });
     for (const [id] of [...this.byId]) if (!keep.has(id)) this.byId.delete(id);
     this.activeIndex = Math.min(this.activeIndex, this.slots.length - 1);
+    if (this.activeSlot) this.applyStyle(this.activeSlot);   // a floor added before it may move its corner / colour
     this.retarget(false);
+  }
+
+  // The floor's accent + lounge corner on its open instance. For the active floor the lounge seats follow the corner:
+  // spots that move are new objects, so a seated bot walks over to its new seat (scene.js reads assets.spots.lounges).
+  applyStyle(slot) {
+    const st = this.styles.get(slot.id);
+    if (!st || !slot.open) return;
+    applyFloorStyle(slot.open.obj, st);
+    slot.open.walls?.setAccent(st.accent);
+    if (slot !== this.activeSlot) return;
+    const lounges = this.assets.spots.lounges;
+    this.assets.style.layouts[st.layout].forEach((s, i) => {
+      const cur = lounges[i];
+      if (!cur || cur.pos.distanceToSquared(s.pos) > 1e-6 || cur.yaw !== s.yaw) lounges[i] = { pos: s.pos.clone(), yaw: s.yaw, lounge: true };
+    });
   }
 
   disposeSlot(s) {
@@ -270,6 +309,7 @@ export class Building {
     this.activeIndex = idx;
     const slot = this.slots[idx];
     this.acquireOpen(slot);
+    this.applyStyle(slot);
     if (intro) {
       for (const s of this.slots) s.lift.snap(1);
       this.roofLift.snap(1);
@@ -328,7 +368,16 @@ export class Building {
     const all = [this.roof, this.shaft, this.cabin, ...this.slots.map((s) => s.closed), ...this.pool];
     const saved = all.map((i) => i.root.visible);
     all.forEach((i) => { i.root.visible = true; });
+    const hidden = this.pool.flatMap((p) => styleObjects(p.obj)).filter((o) => !o.visible);   // every lounge corner, so a switch never compiles
+    hidden.forEach((o) => { o.visible = true; });
+    // The scene is drawn into the post chain's targets (linear, tone mapped later): compile for a target too, or every
+    // program built here has the wrong output variant and the real one compiles mid-ride.
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }), prevRT = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(rt);
     this.renderer.compile(this.scene, camera);
+    this.renderer.setRenderTarget(prevRT);
+    rt.dispose();
+    hidden.forEach((o) => { o.visible = false; });
     all.forEach((i, k) => { i.root.visible = saved[k]; });
   }
 
