@@ -9,6 +9,7 @@ final class DesktopMatcher: NSObject {
     private var latest: [CGDirectDisplayID: URL] = [:]
     private var pending: [CGDirectDisplayID: URL] = [:]       // set, but not yet seen taking effect
     private var attempts: [CGDirectDisplayID: Int] = [:]
+    private var switching = Set<CGDirectDisplayID>()           // the change replaces the user's own picture
 
     private static var folder: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -41,6 +42,7 @@ final class DesktopMatcher: NSObject {
     /// Gives every display its own picture back, unless the user picked a new one meanwhile.
     func restore(_ screens: [(NSScreen, CGDirectDisplayID)]) {
         pending = [:]
+        switching = []
         for (screen, id) in screens {
             guard let original = Settings.originalDesktop(for: id) else { continue }
             if let current = NSWorkspace.shared.desktopImageURL(for: screen), DesktopMatcher.isOurs(current) {
@@ -57,6 +59,7 @@ final class DesktopMatcher: NSObject {
         else { return }
         let current = NSWorkspace.shared.desktopImageURL(for: screen)
         remember(current, for: id)
+        if current.map({ !DesktopMatcher.isOurs($0) }) ?? true { switching.insert(id) } else { switching.remove(id) }
         // a new name every time: macOS keeps showing (and caches) a picture whose file name it has seen before
         let stamp = Int(Date().timeIntervalSince1970 * 1000)
         let file = DesktopMatcher.folder.appendingPathComponent("desktop-\(id)-\(stamp).jpg")
@@ -83,7 +86,16 @@ final class DesktopMatcher: NSObject {
             guard let id = screen.displayID, let file = pending[id] else { continue }
             let tries = attempts[id, default: 0]
             if let current = NSWorkspace.shared.desktopImageURL(for: screen), DesktopMatcher.same(current, file) {
-                pending[id] = nil
+                if switching.remove(id) != nil, let again = DesktopMatcher.twin(of: file) {
+                    // Coming from the user's own picture, macOS records the first change yet keeps showing the old
+                    // picture (seen on macOS 15); a second change, to a fresh copy, is the one that shows.
+                    try? NSWorkspace.shared.setDesktopImageURL(again, for: screen, options: [:])
+                    latest[id] = again
+                    pending[id] = again
+                    attempts[id] = 0
+                } else {
+                    pending[id] = nil
+                }
             } else if tries >= 3 {
                 NSLog("Grok Bot Wallpaper: macOS did not take the desktop picture %@", file.path)
                 pending[id] = nil
@@ -111,6 +123,16 @@ final class DesktopMatcher: NSObject {
 
     private static func isOurs(_ url: URL) -> Bool {
         url.standardizedFileURL.path.hasPrefix(folder.standardizedFileURL.path)
+    }
+
+    private static func twin(of file: URL) -> URL? {
+        let copy = file.deletingLastPathComponent().appendingPathComponent(file.deletingPathExtension().lastPathComponent + "-b.jpg")
+        do {
+            try FileManager.default.copyItem(at: file, to: copy)
+            return copy
+        } catch {
+            return nil
+        }
     }
 
     private static func same(_ a: URL, _ b: URL) -> Bool {
