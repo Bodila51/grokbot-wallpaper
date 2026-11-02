@@ -273,6 +273,24 @@ test('stats: visit length (20 a day per dashboard), live viewers, free-plan mete
   if (plan.sample === 1) assert.ok(plan.est_worker_requests > 40 && plan.est_rows_written >= plan.est_worker_requests / 2, JSON.stringify(plan));
 });
 
+test('stats: countries, each dashboard once a day per country; all time by where it was first seen', { skip: LOCAL_STATS !== true && LOCAL_STATS }, async () => {
+  const counts = async () => {
+    const c = (await report()).countries, at = (list) => Object.fromEntries(list.map((x) => [x.code, x.n]));
+    return { week: at(c.last_7_days), ever: at(c.all_time), names: Object.fromEntries(c.last_7_days.map((x) => [x.code, x.name])) };
+  };
+  const before = await counts(), a = dash(), b = dash();
+  await opened(a, { country: 'DE' });
+  await opened(a, { country: 'DE' });                    // a reload: still once
+  await opened(a, { country: 'FR' });                    // the same dashboard from another country that day
+  await opened(b, { country: 'XX' });                    // Cloudflare's "unknown"
+  const after = await counts(), d = (k, where = 'week') => (after[where][k] ?? 0) - (before[where][k] ?? 0);
+  assert.deepEqual([d('DE'), d('FR'), d('Unknown'), d('XX')], [1, 1, 1, 0]);
+  assert.deepEqual([d('DE', 'ever'), d('FR', 'ever'), d('Unknown', 'ever')], [1, 0, 1]);
+  assert.equal(after.names.DE, 'Germany');
+  const html = await (await fetch(`${BASE}/_stats?key=${encodeURIComponent(KEY)}`)).text();
+  assert.ok(html.includes('Countries') && html.includes('🇩🇪 Germany'), 'flag and name on the page');
+});
+
 test('stats: closed days are kept for good, per-dashboard rows for 31 days', { skip: LOCAL_STATS !== true && LOCAL_STATS }, async () => {
   const h = dash();
   for (const n of [40, 10, 1]) await opened(h, { day: utcDay(n) });

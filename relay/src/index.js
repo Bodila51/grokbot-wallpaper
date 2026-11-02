@@ -233,10 +233,16 @@ export class Stats extends DurableObject {
     sql.exec('CREATE TABLE IF NOT EXISTS msg_day (day TEXT PRIMARY KEY, n INTEGER NOT NULL) WITHOUT ROWID');
     sql.exec('CREATE TABLE IF NOT EXISTS live (h TEXT PRIMARY KEY, n INTEGER NOT NULL, at INTEGER NOT NULL) WITHOUT ROWID');
     sql.exec('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL) WITHOUT ROWID');
-    if (this.meta('schema') !== '2') {                   // carry over the first version's rows
-      try { sql.exec('INSERT OR IGNORE INTO dashes (h, first, last) SELECT h, first, last FROM dash'); sql.exec('DROP TABLE dash'); } catch { /* none */ }
-      try { sql.exec('INSERT OR IGNORE INTO dash_days (day, h, bots, src) SELECT day, h, bots, src FROM dash_day'); sql.exec('DROP TABLE dash_day'); } catch { /* none */ }
-      this.setMeta('schema', '2');
+    // Each dashboard once per day per country (two letters or Unknown), 31 days like dash_days.
+    sql.exec('CREATE TABLE IF NOT EXISTS dash_countries (day TEXT NOT NULL, country TEXT NOT NULL, h TEXT NOT NULL, PRIMARY KEY (day, country, h)) WITHOUT ROWID');
+    const schema = this.meta('schema');
+    if (schema !== '3') {
+      if (schema !== '2') {                              // carry over the first version's rows
+        try { sql.exec('INSERT OR IGNORE INTO dashes (h, first, last) SELECT h, first, last FROM dash'); sql.exec('DROP TABLE dash'); } catch { /* none */ }
+        try { sql.exec('INSERT OR IGNORE INTO dash_days (day, h, bots, src) SELECT day, h, bots, src FROM dash_day'); sql.exec('DROP TABLE dash_day'); } catch { /* none */ }
+      }
+      try { sql.exec('ALTER TABLE dashes ADD COLUMN country TEXT'); } catch { /* there already */ }   // where it was first seen
+      this.setMeta('schema', '3');
     }
   }
 
@@ -246,8 +252,10 @@ export class Stats extends DurableObject {
   /** A dashboard was opened. A reload with nothing new writes nothing. */
   seen(today, day, h, v) {
     this.settle(today);
-    this.sql.exec(`INSERT INTO dashes (h, first, last) VALUES (?, ?, ?) ON CONFLICT (h) DO UPDATE
-      SET first = min(first, excluded.first), last = max(last, excluded.last) WHERE excluded.first < first OR excluded.last > last`, h, day, day);
+    this.sql.exec(`INSERT INTO dashes (h, first, last, country) VALUES (?, ?, ?, ?) ON CONFLICT (h) DO UPDATE
+      SET first = min(first, excluded.first), last = max(last, excluded.last), country = coalesce(country, excluded.country)
+      WHERE excluded.first < first OR excluded.last > last OR country IS NULL`, h, day, day, v.country);
+    this.sql.exec('INSERT OR IGNORE INTO dash_countries (day, country, h) VALUES (?, ?, ?)', day, v.country, h);
     this.sql.exec(`INSERT INTO dash_days (day, h, bots, floors, src, phone, desktop, usage, routines, chat, teams) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT (day, h) DO UPDATE SET bots = excluded.bots, floors = excluded.floors, src = excluded.src,
         phone = max(phone, excluded.phone), desktop = max(desktop, excluded.desktop), usage = max(usage, excluded.usage),
@@ -288,6 +296,7 @@ export class Stats extends DurableObject {
     }
     this.setMeta('final', yesterday);
     this.sql.exec('DELETE FROM dash_days WHERE day < ?', addDays(today, -30));
+    this.sql.exec('DELETE FROM dash_countries WHERE day < ?', addDays(today, -30));
     this.sql.exec('DELETE FROM live WHERE at < ?', Date.now() - 2 * 864e5);   // a count no topic has refreshed for 2 days
   }
 
@@ -307,6 +316,8 @@ export class Stats extends DurableObject {
       sources: Object.fromEntries([...SOURCES].map((s) => [s, count((r) => r.src === s)])),
       devices: { phone: count((r) => r.phone), desktop: count((r) => r.desktop) },
       setup: Object.fromEntries(HAS.map((k) => [k, count((r) => r[k])])),
+      countries: Object.fromEntries(this.sql.exec('SELECT country, COUNT(DISTINCT h) AS n FROM dash_countries WHERE day >= ? AND day <= ? GROUP BY country', from, to)
+        .toArray().map((r) => [r.country, r.n])),
     };
   }
 
@@ -328,11 +339,16 @@ export class Stats extends DurableObject {
     const tallies = Object.fromEntries(this.sql.exec('SELECT kind, n FROM tallies WHERE day = ?', today).toArray().map((r) => [r.kind, r.n]));
     const t = (k) => tallies[k] ?? 0, sampled = Object.values(tallies).reduce((a, b) => a + b, 0);
     const live = this.sql.exec('SELECT COALESCE(SUM(n), 0) AS n, COUNT(*) AS topics FROM live WHERE at >= ?', now - 2 * 864e5).one();
+    const week = this.summary(ago(6), today);
+    const ranked = (counts) => Object.entries(counts).map(([code, n]) => ({ code, name: countryName(code), n })).sort((a, b) => b.n - a.n || (a.name < b.name ? -1 : 1));
+    const firstSeen = this.sql.exec("SELECT coalesce(country, 'Unknown') AS c, COUNT(*) AS n FROM dashes GROUP BY c").toArray();
     return {
       generated: new Date(now).toISOString(),
       dashboards: { today: todays.dashboards, new_today: todays.new, last_7_days: uniques(ago(6)), last_30_days: uniques(ago(29)), all_time: one('SELECT COUNT(*) AS n FROM dashes') },
       live_now: { viewers: live.n, dashboards: live.topics },
-      last_7_days: { ...this.summary(ago(6), today), visits: { count: buckets.reduce((a, b) => a + b, 0), median_seconds: bucketMedian(buckets) } },
+      last_7_days: { ...week, visits: { count: buckets.reduce((a, b) => a + b, 0), median_seconds: bucketMedian(buckets) } },
+      // 7 days: each dashboard once per country it was opened from; all time: the country it was first seen in.
+      countries: { last_7_days: ranked(week.countries), all_time: ranked(Object.fromEntries(firstSeen.map((r) => [r.c, r.n]))) },
       days,
       free_plan: { day: today, cap: FREE_DAILY, sample, tallied: tallies, est_worker_requests: sampled * sample,
         // Every message is written once and deleted once; a live viewer writes its count on connect and on close; a beacon ~2 rows.
@@ -356,8 +372,11 @@ async function beacon(request, env, cfg, ip) {
     } else if (Number.isInteger(b.bots) && b.bots >= 0 && b.bots <= 1000 && SOURCES.has(b.src)) {
       const has = b.has && typeof b.has === 'object' ? b.has : {};
       const day = cfg.STATS_TEST && /^\d{4}-\d\d-\d\d$/.test(b.day) ? b.day : today;   // tests only: a beacon from another day
+      // Only the two-letter country Cloudflare sees for the request (never the IP, city or region); tests may name one.
+      const seenIn = cfg.STATS_TEST && typeof b.country === 'string' ? b.country : request.cf?.country;
+      const country = /^[A-Z]{2}$/.test(seenIn) && seenIn !== 'XX' && seenIn !== 'T1' ? seenIn : 'Unknown';
       await stats.seen(today, day, b.h, { bots: b.bots, floors: Number.isInteger(b.floors) && b.floors >= 0 ? Math.min(b.floors, 100) : 0, src: b.src,
-        phone: b.phone === true, has: Object.fromEntries(HAS.map((k) => [k, has[k] === true])) });
+        phone: b.phone === true, has: Object.fromEntries(HAS.map((k) => [k, has[k] === true])), country });
     }
   } catch { /* not ours */ }
   return new Response(null, { status: 204, headers: CORS });
@@ -377,6 +396,9 @@ function page(r, key) {
   const tile = (label, v, sub = '') => `<div class="tile"><span>${label}</span><b>${n(v)}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
   const fill = (p) => (p > 0 ? `max(3px,${Math.min(100, p).toFixed(1)}%)` : '0');
   const row = (label, v, total, tail = n(v)) => `<div class="row"><span>${label}</span><div class="bar"><i style="width:${fill((100 * v) / Math.max(total, 1))}"></i></div><span class="num">${tail}</span></div>`;
+  const places = (list, total) => (list.length ? list.slice(0, 15).map((c) => `<div class="row place" title="${esc(c.name)}: ${pct(c.n, total)}">`
+    + `<span>${flag(c.code)} ${esc(c.name)}</span><div class="bar"><i style="width:${fill((100 * c.n) / Math.max(total, 1))}"></i></div><span class="num">${n(c.n)}</span></div>`).join('')
+    : '<p class="note flush">None yet</p>');
   const histMax = Math.max(...w.bots.histogram.map((b) => b.n), 1);
   const meter = (label, v) => {
     const p = v / r.free_plan.cap, tone = p >= 0.9 ? 'bad' : p >= 0.7 ? 'warn' : '';
@@ -408,7 +430,10 @@ h2{font-size:15px;font-weight:600;letter-spacing:-.01em;margin:0 0 2px}
 .bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
 .row.warn .bar i{background:var(--warn)}.row.bad .bar i{background:var(--bad)}
 .num{text-align:right;color:var(--mute);font-variant-numeric:tabular-nums}
-.note{color:var(--mute);font-size:12px;margin:-2px 0 10px 106px}
+.note{color:var(--mute);font-size:12px;margin:-2px 0 10px 106px}.note.flush{margin:6px 0}
+.cols{display:grid;gap:14px 32px;grid-template-columns:minmax(0,1fr)}@media(min-width:760px){.cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+h3{font-size:12px;font-weight:600;color:var(--mute);margin:0 0 4px}
+.row.place{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr) 44px}.row.place>span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 svg{display:block;width:100%;height:150px}
 .axis{display:flex;justify-content:space-between;color:var(--mute);font-size:11px;margin-top:6px;font-variant-numeric:tabular-nums}
 .legend{display:flex;gap:16px;color:var(--mute);font-size:12px;margin-top:10px}.legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
@@ -436,12 +461,14 @@ ${row('Both', w.sources.both, of, pct(w.sources.both))}${row('No lines yet', w.s
 <div class="card"><h2>Device and time open</h2><p class="lead">Last 7 days</p>
 <div class="pair"><div><span>Median visit</span><b class="big">${duration(w.visits.median_seconds)}</b></div><div><span>Visits measured</span><b class="big">${n(w.visits.count)}</b></div></div>
 ${row('Phone or tablet', w.devices.phone, of, pct(w.devices.phone))}${row('Desktop', w.devices.desktop, of, pct(w.devices.desktop))}</div>
+<div class="card wide"><h2>Countries</h2><p class="lead">Where dashboards are opened, from the country Cloudflare sees · top 15</p>
+<div class="cols"><div><h3>Last 7 days</h3>${places(r.countries.last_7_days, of)}</div><div><h3>All time · where first seen</h3>${places(r.countries.all_time, r.dashboards.all_time)}</div></div></div>
 <div class="card"><h2>Relay messages a day</h2><p class="lead">Counted when each topic checks in, about twice a day · ${n(r.relay_messages_all_time)} all time</p>
 ${bars(r.days.map((d) => [0, d.relay_messages, `${d.day}: ${d.relay_messages} messages`]), r.days[0].day)}</div>
 <div class="card"><h2>Free plan today</h2><p class="lead">Estimated from 1 in ${r.free_plan.sample} requests. At 70% on either, move to Workers Paid ($5 a month).</p>
 ${meter('Requests', r.free_plan.est_worker_requests)}${meter('Rows written', r.free_plan.est_rows_written)}</div>
 </section>
-<footer>A dashboard is known only by a hash of its topic: no topics, IP addresses or user agents are stored. Daily totals are kept for good, per-dashboard days for 31 days.<br>
+<footer>A dashboard is known only by a hash of its topic, plus the country Cloudflare sees: no topics, IP addresses or user agents are stored. Daily totals are kept for good, per-dashboard days for 31 days.<br>
 <a href="?key=${encodeURIComponent(key)}&amp;format=json">JSON</a></footer>
 </main></body></html>`;
 }
@@ -456,6 +483,17 @@ function bars(items, firstDay) {
   }).join('');
   return `<svg viewBox="0 0 600 150" preserveAspectRatio="none" role="img" aria-label="peak ${max}"><line x1="0" y1="149.5" x2="600" y2="149.5" stroke="var(--line)"/>${rects}</svg>`
     + `<div class="axis"><span>${esc(firstDay.slice(5))}</span><span>peak ${max.toLocaleString('en-US')} a day</span><span>today</span></div>`;
+}
+
+const REGIONS = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; } })();
+
+function countryName(code) {
+  if (code === 'Unknown') return 'Unknown';
+  try { return REGIONS?.of(code) || code; } catch { return code; }
+}
+
+function flag(code) {                                    // two regional-indicator letters make the flag emoji
+  return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)) : '🌐';
 }
 
 function duration(s) {

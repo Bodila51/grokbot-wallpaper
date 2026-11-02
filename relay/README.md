@@ -48,7 +48,8 @@ stats stay clean):
 $env:RELAY_URL="https://relay.0xcodila.com"; node --test test/relay.test.mjs
 ```
 
-Local run with small knobs, so all 19 tests run (`STATS_TEST` lets a test beacon claim another day; never set it live):
+Local run with small knobs, so all 20 tests run (`STATS_TEST` lets a test beacon claim another day and country; never
+set it live):
 
 ```powershell
 npx wrangler@4 dev --var RETAIN_SECONDS:8 --var KEEP_LINES:20 --var TOPIC_BURST:30 --var KEEPALIVE_SECONDS:2 --var STREAM_SECONDS:6 --var STATS_KEY:local-test-key --var STATS_SAMPLE:1 --var STATS_TEST:1
@@ -60,11 +61,12 @@ $env:RELAY_URL="http://127.0.0.1:8787"; $env:RELAY_STATS_KEY="local-test-key"; $
 `/_stats?key=…`: dashboards opened today, in 7 and 30 days and all time, new today, and live now (open viewer sockets,
 reported by each topic when one connects or closes). Below: 30 days of new vs returning dashboards, bots per dashboard,
 how fully people set up the prompt (usage meter, routines, chat links, teams), relay vs ntfy.sh, phone vs desktop, the
-median visit, relay messages a day, and today's free-plan meter (Worker requests and rows written, estimated from one
+median visit, countries (top 15 for 7 days and all time; two-letter code only, XX/T1/missing as Unknown), relay
+messages a day, and today's free-plan meter (Worker requests and rows written, estimated from one
 request in 20) against the 100,000-a-day cap. Days are UTC.
 
-Kept forever: one row per dashboard (its hash, first and last day seen) and one aggregate per day. Kept 31 days: one row
-per dashboard per day. Counters are per day (visit lengths in 13 buckets, request tallies); a reload updates its row,
+Kept forever: one row per dashboard (its hash, first and last day seen, the country first seen in) and one aggregate per
+day, with each country's count. Kept 31 days: one row per dashboard per day, and per dashboard, day and country. Counters are per day (visit lengths in 13 buckets, request tallies); a reload updates its row,
 and at most 20 visit ends count per dashboard a day, so nothing grows with the number of requests.
 
 ## What the plans carry
@@ -96,8 +98,8 @@ routines, 4 usage lines) and one dashboard open all day.
 ## Privacy
 
 The dashboard sends two anonymous beacons per visit: on open, the first 16 hex characters of the SHA-256 of the topic,
-the number of bots and teams, which mailbox the lines came from, phone or not, and which parts of the prompt are set up;
-on leaving, how long it was open. The relay stores no topic, IP address or user agent, and the stats page is behind a
+the number of bots and teams, which mailbox the lines came from, phone or not, and which parts of the prompt are set up,
+and the country Cloudflare sees for the request (never the IP); on leaving, how long it was open. The relay stores no topic, IP address or user agent, and the stats page is behind a
 secret key.
 
 ## Switching from ntfy.sh
