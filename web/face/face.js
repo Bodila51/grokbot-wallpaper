@@ -1,8 +1,9 @@
 // Grok Bot Wallpaper: live eyes on the big sphere + the user's bots as live cards.
 // The eyes follow the cursor (Lively forwards mouse moves to the wallpaper); with no cursor around they wander,
-// blink, glance at whichever bot needs the user, and get sleepy when every bot is resting. Data: the user's channel,
-// else /api/state (the journal server); with neither, only the bot and its sky, no cards. ?demo=1 animates the bundled
-// demo state instead. At most 30 frames per second.
+// blink, glance at whichever bot needs the user, and get sleepy when every bot is resting. Data: the user's channel
+// (#feed=&key= private, or #<topic> legacy), else /api/state (the journal server); with neither, only the bot and its
+// sky, no cards. ?demo=1 animates the bundled demo state instead. At most 30 frames per second.
+import { feedFromHash, startPrivateFeed } from '../feed.js';
 
 const STATUS = {
   working: { text: 'working', c: 'var(--working)' },
@@ -607,8 +608,17 @@ setBot(params.get('bot') || (() => { try { return localStorage.getItem('gbw.bot'
 window.grokBot = { setBot, setTime };
 window.livelyPropertyListener = (name, value) => {
   if (name === 'botColor') setBot(Number(value) === 1 ? 'black' : 'white');
-  if (name === 'feed') {                                 // the user's bots channel, typed into Lively's settings
-    const typed = String(value ?? '').trim(), got = channelOf(typed);
+  if (name === 'feed') {                                 // paste #feed=…&key=… or #<channel>, kept in the hash
+    const typed = String(value ?? '').trim();
+    const priv = feedFromHash(typed.startsWith('#') ? typed : `#${typed}`);
+    if (priv?.kind === 'private') {
+      const hash = `#feed=${encodeURIComponent(priv.base)}&key=${encodeURIComponent(priv.key)}`;
+      if (hash === location.hash) return;
+      location.replace(location.pathname + location.search + hash);
+      location.reload();
+      return;
+    }
+    const got = channelOf(typed);
     if (typed && !got) return;                           // no channel in it: keep the one we have
     const next = got ? got[0] : '';                      // a pasted link becomes just its channel
     // Lively sends every setting on load, an empty box included: that must not drop a channel the link already carries
@@ -620,12 +630,10 @@ window.livelyPropertyListener = (name, value) => {
   }
 };
 
-// ---------- the user's own bots: their channel on ntfy.sh ----------
-// A link with #<channel> (or the older ?feed=<channel>), remembered after that, connects the wallpaper to the user's
-// bots; the hash never reaches GitHub Pages, and &ntfy=<https server> picks a self-hosted ntfy. Every bot posts one
-// line per status change, {"bot":"…","status":"…","step":"…"}, plus roster, looks and usage lines (README), to the
-// channel with plain curl; nothing else runs on the bots' box. The page reads the last 12 hours, then listens live.
-// The mailbox is FEED_BASE unless the link names another: #<channel>@<host>, ?feed=<host> or &ntfy=<https server>.
+// ---------- the user's own bots: private feed or legacy shared topic ----------
+// Private: #feed=<urlencoded base>&key=<read key>. Legacy: #<channel> (or ?feed=<channel>), optionally @host / &ntfy=.
+const LINK = feedFromHash(location.hash, location.search);
+const PRIVATE = LINK?.kind === 'private' ? LINK : null;
 const FEED_BASE = 'https://ntfy.sh/';                    // = FEED_BASE in office/lib/feedbase.js (a test keeps them equal)
 const RELAY = 'https://relay.0xcodila.com';              // our relay: bots set up with the current prompt post there
 const stored = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
@@ -641,7 +649,7 @@ function channelOf(raw) {
   const bare = /gbw-[A-Za-z0-9_-]{6,64}/.exec(s);
   return bare && CHANNEL.exec(bare[0]);
 }
-const HASH = channelOf(location.hash);
+const HASH = PRIVATE ? null : channelOf(location.hash);
 function httpsServer(raw) {
   try {
     const u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`);
@@ -702,7 +710,7 @@ function applyLine(text, time) {                         // a status, roster, lo
   return true;
 }
 // the channel keeps 12 hours, the wallpaper remembers every bot it has seen: a quiet bot stays on screen, resting
-const MEMORY_KEY = `gbw.bots.${FEED}`;
+const MEMORY_KEY = PRIVATE ? `gbw.bots.${PRIVATE.base}` : `gbw.bots.${FEED}`;
 function remember() { try { localStorage.setItem(MEMORY_KEY, JSON.stringify({ bots: state.bots, looks, usage: state.usage })); } catch { /* not remembered */ } }
 function settleQuiet() {                                 // a finished task rests after 30 min, a silent one after 3 h
   const now = Date.now();
@@ -713,12 +721,31 @@ function settleQuiet() {                                 // a finished task rest
   }
   return changed;
 }
-async function connectFeed() {
+function loadMemory() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(MEMORY_KEY)) || {}; } catch { /* nothing remembered yet */ }
-  if (!saved.bots) saved = { bots: saved };              // the first version remembered the bots alone
+  if (!saved.bots) saved = { bots: saved };
   looks = saved.looks || {};
-  state = { bots: saved.bots, usage: saved.usage ?? null };
+  state = { bots: saved.bots || {}, usage: saved.usage ?? null };
+}
+function connectPrivate() {
+  loadMemory();
+  settleQuiet();
+  remember();
+  render(state);
+  startPrivateFeed({ base: PRIVATE.base, key: PRIVATE.key }, {
+    onBatch(messages) {
+      let changed = false;
+      for (const m of messages) {
+        if (m?.event === 'message' && applyLine(m.message, m.time)) changed = true;
+      }
+      if (changed) { remember(); render(state); }
+    },
+  });
+  setInterval(() => { if (settleQuiet()) { remember(); render(state); } }, 60e3);
+}
+async function connectFeed() {
+  loadMemory();
   // the usual mailbox (ntfy.sh) means "read both", like the office: bots on the first prompt post to ntfy.sh, bots on
   // the current one to our relay; a link that names another server reads only that one
   const boxes = (NTFY === FEED_BASE.replace(/\/$/, '') ? [RELAY, NTFY] : [NTFY]).map((s) => `${s}/${encodeURIComponent(FEED)}`);
@@ -786,7 +813,8 @@ async function startDemo() {
     render(state);
   }, 3500);
 }
-if (FEED) connectFeed();
+if (PRIVATE) connectPrivate();
+else if (FEED) connectFeed();
 else if (params.get('demo') === '1') {                   // made-up bots, only when a link asks for them
   fetch('../data/demo-looks.json').then((r) => (r.ok ? r.json() : {})).then((j) => { looks = j.looks || j || {}; if (state) { crew = ''; needs.innerHTML = ''; render(state); } }).catch(() => {});
   startDemo();

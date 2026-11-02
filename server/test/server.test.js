@@ -121,7 +121,8 @@ test('/api/state: shape, gzip, since=unchanged, live append < 1.5 s', async () =
     assert.match(r.headers['cache-control'], /no-store/);
     const st = JSON.parse(r.body);
     for (const k of ['version', 'now', 'demo', 'summary', 'usage', 'floors', 'bots', 'feed']) assert.ok(k in st, k);
-    assert.equal(st.bots['x-writer'].floor, 'x-content');
+    assert.equal(st.bots['x-writer'].floor, 'x-kontent');
+    assert.equal(st.floors.find((f) => f.id === 'x-kontent')?.name, 'X-контент');
     assert.equal(st.bots['x-writer'].desk, 1);
     assert.equal(st.floors[0].free_desks, 19);
 

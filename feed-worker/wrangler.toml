@@ -1,0 +1,26 @@
+# Private bot-status feed. Copy this folder, fill secrets, deploy with Wrangler.
+# Docs: ../docs/cloudflare-feed.md
+name = "bot-status-feed"
+main = "src/index.js"
+compatibility_date = "2026-11-02"
+workers_dev = true
+
+# Comma-separated origins allowed to call GET /feed from a browser (your GitHub Pages host).
+# Example: "https://<you>.github.io"
+# Leave empty to allow only non-browser clients (curl) until you set it.
+[vars]
+PAGES_ORIGINS = ""
+
+[[durable_objects.bindings]]
+name = "FEED"
+class_name = "FeedLog"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["FeedLog"]
+
+[observability]
+enabled = true
+
+[observability.traces]
+enabled = true

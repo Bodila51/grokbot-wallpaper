@@ -1,0 +1,73 @@
+/* Texas Hill Country accents. Status hues stay recognisable; the cards shift to saddle leather and tin.
+   These win over :root / .bhq-surface because of the data-theme attribute. The office sets neither. */
+
+html[data-theme="ranch"] {
+  --bg-0: #FFD7A1;
+  --bg-1: #E36A3C;
+  --bg-2: #24345C;
+  --ink: #2A1A10;
+  --muted: #5C3B28;
+  /* Chrome stays Nunito: Fraunces is wider and clips the brand lockup. The menu uses it. */
+  --font: "Nunito", "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+  --working: #3E9A4A;
+  --waiting: #F0A202;
+  --error: #E24B3B;
+  --stuck: #E07A1F;
+  --done: #3D7FD6;
+  --idle: #A89880;
+}
+
+html[data-theme="ranch"] .bhq-surface {
+  --base: #3C2618;
+  --glow: #C9843A;
+  --hi: #F8EBD6;
+  --mid: #E4C9A2;
+  --dim: #C4A684;
+  background:
+    linear-gradient(180deg, rgba(255, 220, 170, .12), transparent 46%, rgba(30, 12, 4, .28)),
+    var(--base);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 226, 186, .32),
+    inset 0 0 0 1px rgba(120, 64, 28, .45),
+    0 8px 22px rgba(48, 20, 6, .32);
+}
+
+html[data-theme="ranch"] .bhq-surface[data-s="working"] {
+  --base: #243616; --glow: #C6DE62; --hi: #F4F8C8; --mid: #D5E7A4; --dim: #B4C888;
+}
+html[data-theme="ranch"] .bhq-surface[data-s="waiting_user"],
+html[data-theme="ranch"] .bhq-surface[data-s="stuck"] {
+  --base: #6A3E0C; --glow: #FFC15A; --hi: #FFE7C0; --mid: #F0D09A; --dim: #E0BC84;
+}
+html[data-theme="ranch"] .bhq-surface[data-s="error"] {
+  --base: #7A1E22; --glow: #FF6A66; --hi: #FFE4E2; --mid: #F4B8B4; --dim: #E09896;
+}
+html[data-theme="ranch"] .bhq-surface[data-s="done"] {
+  --base: #24386A; --glow: #8FB4FF; --hi: #E7EEFF; --mid: #C5D4F8; --dim: #A8B8E4;
+}
+
+html[data-theme="ranch"] .bhq-theme {
+  font-family: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+  font-weight: 700;
+}
+
+html[data-theme="ranch"] .bhq-cta:not(:disabled) {
+  background: #F0D7B0;
+  color: #3A2418;
+  box-shadow: inset 0 1px 0 #FFF6E6, 0 4px 12px rgba(48, 20, 6, .35);
+}
+html[data-theme="ranch"] .bhq-floor[aria-current="true"] .bhq-fnum {
+  background: #F0D7B0;
+  color: #3A2418;
+}
+html[data-theme="ranch"] .bhq-theme:focus-within,
+html[data-theme="ranch"] :where(#topbar, #floors, #panel, #feed, .bhq-zoom, .bhq-dock, .bhq-sheet) :focus-visible {
+  outline-color: #E2B04A;
+}
+
+html.bhq-phone[data-theme="ranch"] .bhq-floor:not([aria-current="true"]) {
+  background: linear-gradient(180deg, rgba(255, 214, 160, .08), transparent 45%, rgba(0, 0, 0, .22)), #3C2618;
+}
+html.bhq-phone[data-theme="ranch"] .bhq-floor[aria-current="true"] {
+  background: linear-gradient(180deg, rgba(255, 220, 170, .16), rgba(255, 220, 170, .06)), #4A3020;
+}

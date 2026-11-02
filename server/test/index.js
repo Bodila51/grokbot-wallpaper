@@ -4,3 +4,5 @@ import './journal.test.js';
 import './server.test.js';
 import './viewkey.test.js';
 import './feedbase.test.js';
+import './floor-theme-rules.test.js';
+import './feed-http.test.js';

@@ -28,10 +28,24 @@ export const STUDIO = {
 
 const srgb = (c) => { const k = new THREE.Color(); k.setStyle(c, THREE.LinearSRGBColorSpace); return new THREE.Vector3(k.r, k.g, k.b); };   // raw sRGB numbers, no decoding
 
+// The office backdrop until a theme calls setStudioBackdrop (before the pass is built).
+let backdrop = STUDIO;
+
+export function setStudioBackdrop(next) {
+  if (!next) { backdrop = STUDIO; return; }
+  backdrop = {
+    centre: next.centre || STUDIO.centre,
+    radii: next.radii || STUDIO.radii,
+    stops: next.stops || STUDIO.stops,
+    shadow: next.shadow || STUDIO.shadow,
+    layers: next.layers || STUDIO.layers,
+  };
+}
+
 // The same backdrop as CSS, for the moment before the first frame and for the page behind the canvas.
 export function studioCss() {
-  const [cx, cy] = STUDIO.centre, [rx, ry] = STUDIO.radii;
-  const st = STUDIO.stops.map(([t, c]) => `${c} ${(t * 100).toFixed(1)}%`).join(', ');
+  const [cx, cy] = backdrop.centre, [rx, ry] = backdrop.radii;
+  const st = backdrop.stops.map(([t, c]) => `${c} ${(t * 100).toFixed(1)}%`).join(', ');
   return `radial-gradient(ellipse ${rx * 100}% ${ry * 100}% at ${cx * 100}% ${cy * 100}%, ${st})`;
 }
 
@@ -102,19 +116,21 @@ export class StudioPass extends Pass {
     this.needsSwap = true;
     this.maskMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false, side: THREE.DoubleSide, depthTest: false, depthWrite: false, fog: false });
     this.blurMat = new THREE.ShaderMaterial({ uniforms: { tMap: { value: null }, texel: { value: new THREE.Vector2() }, sigma: { value: 0 } }, vertexShader: QUAD_VS, fragmentShader: BLUR_FS, depthTest: false, depthWrite: false });
-    const [L0, L1, L2] = STUDIO.layers;
+    const look = backdrop;
+    const [L0, L1, L2] = look.layers;
     this.composeMat = new THREE.ShaderMaterial({
       uniforms: {
         tDiffuse: { value: null }, tHold: { value: null }, tL0: { value: null }, tL1: { value: null }, tL2: { value: null },
-        stop0: { value: srgb(STUDIO.stops[0][1]) }, stop1: { value: srgb(STUDIO.stops[1][1]) }, stop2: { value: srgb(STUDIO.stops[2][1]) },
-        stopMid: { value: STUDIO.stops[1][0] },
-        shadowC: { value: srgb(STUDIO.shadow) },
-        centre: { value: new THREE.Vector2(...STUDIO.centre) }, radii: { value: new THREE.Vector2(...STUDIO.radii) },
+        stop0: { value: srgb(look.stops[0][1]) }, stop1: { value: srgb(look.stops[1][1]) }, stop2: { value: srgb(look.stops[2][1]) },
+        stopMid: { value: look.stops[1][0] },
+        shadowC: { value: srgb(look.shadow) },
+        centre: { value: new THREE.Vector2(...look.centre) }, radii: { value: new THREE.Vector2(...look.radii) },
         push: { value: [new THREE.Vector2(), new THREE.Vector2(), new THREE.Vector2()] },
         layerW: { value: new THREE.Vector3(L0.w, L1.w, L2.w) },
       },
       vertexShader: QUAD_VS, fragmentShader: COMPOSE_FS, depthTest: false, depthWrite: false,
     });
+    this.look = backdrop;
     this.fsQuad = new FullScreenQuad(this.blurMat);
     this.t = null;
     this.size = new THREE.Vector2(1, 1);
@@ -151,11 +167,15 @@ export class StudioPass extends Pass {
     renderer.setRenderTarget(t.mask);
     const prevOverride = this.scene.overrideMaterial;
     this.scene.overrideMaterial = this.maskMat;
+    // Scenery a theme puts on layer 1 stays out of the silhouette, so the aura stays the building's.
+    const prevLayers = this.camera.layers.mask;
+    this.camera.layers.set(0);
     renderer.render(this.scene, this.camera);
+    this.camera.layers.mask = prevLayers;
     this.scene.overrideMaterial = prevOverride;
     renderer.autoClear = false;
 
-    const sig = STUDIO.layers.map((l, i) => Math.min(13, (l.sigma * unit) / [4, 8, 32][i]));   // in texels of that layer's target
+    const sig = this.look.layers.map((l, i) => Math.min(13, (l.sigma * unit) / [4, 8, 32][i]));   // in texels of that layer's target
     this.blur(renderer, t.mask, t.cB, 1, 0, sig[0]);              // contact
     this.blur(renderer, t.cB, t.cA, 0, 1, sig[0]);
     this.blur(renderer, t.mask, t.mB, 0, 0, 0);                   // 1/8, 1/16, 1/32 copies (bilinear = 2x2 average)
@@ -184,8 +204,8 @@ export class StudioPass extends Pass {
     u.tHold.value = u.tL0.value = t.cA.texture;                            // the silhouette, lightly blurred: where the building really is
     u.tL1.value = t.mB.texture;
     u.tL2.value = t.wA.texture;
-    STUDIO.layers.forEach((l, i) => u.push.value[i].set(0, (l.down * unit) / H));
-    u.layerW.value.set(STUDIO.layers[0].w, STUDIO.layers[1].w * soften, STUDIO.layers[2].w * soften);
+    this.look.layers.forEach((l, i) => u.push.value[i].set(0, (l.down * unit) / H));
+    u.layerW.value.set(this.look.layers[0].w, this.look.layers[1].w * soften, this.look.layers[2].w * soften);
     this.fsQuad.material = this.composeMat;
     renderer.setRenderTarget(this.renderToScreen ? null : writeBuffer);
     if (this.clear) renderer.clear();

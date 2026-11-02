@@ -8,17 +8,27 @@ Work in progress.
 
 ## Your own bots (no server)
 
-You do not need to run anything to see your own bots. They post their status to a private channel on our relay (`relay.0xcodila.com`, see `relay/`) or, if they were set up with the first prompt, on ntfy.sh. The dashboard reads both and merges them.
+You do not need to run a journal server to see your own bots. Prefer a **private HTTP feed** you host (Cloudflare Worker template in `feed-worker/`, setup guide and AI copy-paste prompt in [`docs/cloudflare-feed.md`](docs/cloudflare-feed.md)). The older shared-topic path on our relay (`relay.0xcodila.com`, see `relay/`) and ntfy.sh still works as a legacy option.
 
-### How it works
+### Private feed (recommended)
 
-Each bot runs one `curl` on its own box whenever its status changes and sends a short JSON line to `https://ntfy.sh/<topic>`. The dashboard and the wallpaper are static pages on GitHub Pages: your browser reads that channel straight from ntfy.sh (the last 12 hours, then live) and draws the office. There is no server and no tunnel, and nothing connects in to the bots' box: they only make outbound HTTPS calls.
+Bots `POST` JSON to your Worker; the browser polls it with a read key. The base URL and key stay in the fragment (`#feed=<urlencoded base>&key=<read key>`), which GitHub Pages never receives. Write and read keys are separate; CORS is limited to your Pages origin.
 
-### Setup
+1. Deploy `feed-worker/` (secrets + `PAGES_ORIGINS`) as described in [`docs/cloudflare-feed.md`](docs/cloudflare-feed.md).
+2. Paste the AI setup prompt from that doc into your bot (fill in `FEED_BASE`, `WRITE_KEY`, `READ_KEY`).
+3. Open the link the bot replies with, for example `https://bodila51.github.io/grokbot-wallpaper/web/?theme=ranch#feed=…&key=…`.
 
-1. Copy the block from `PROMPT.md` and paste it into your Grok Bot once. It makes the topic (`gbw-` plus 22 random letters and digits), saves the posting rule in the shared memory of all your bots, posts the roster and a look for each bot, and sets up the daily and 2-hourly routines.
-2. The bot replies with two links. Open the dashboard in a browser: `https://bodila51.github.io/grokbot-wallpaper/#<topic>`.
-3. For the wallpaper, use the second link as a web wallpaper in Lively (Windows, `lively/README.md`) or the Mac app (`mac/README.md`): `https://bodila51.github.io/grokbot-wallpaper/face/#<topic>`.
+### Shared topic (legacy)
+
+Each bot can instead `curl` a short JSON line to a topic on the relay or ntfy.sh. The dashboard link is `#<topic>` (optionally `&ntfy=<https server>`). **Anyone with the topic string can read and post**, so treat it like a password and prefer a private feed when you can.
+
+1. Copy the block from `PROMPT.md` and paste it into your Grok Bot once. It makes the topic (`gbw-` plus 22 random letters and digits), saves the posting rule, posts the roster and looks, and sets up routines.
+2. Open the dashboard: `https://bodila51.github.io/grokbot-wallpaper/#<topic>`.
+3. Wallpaper (Lively / Mac): `https://bodila51.github.io/grokbot-wallpaper/face/#<topic>`.
+
+### Themes
+
+Optional exterior: `?theme=ranch` (Texas Hill Country) in the query; feed stays in the hash. Each floor can wear its own interior (Theme menu, feed `floor_themes`, or a keyword guess from the floor name). Details: [`docs/THEMES.md`](docs/THEMES.md).
 
 ### The line formats
 
@@ -31,20 +41,23 @@ One JSON object per POST, at most 4 KB.
 {"type":"usage","total_used_pct":37,"resets_at":"2026-11-01T18:00:00+02:00","bots":{"X Writer":4.1}}
 {"chat":{"X Writer":"grokbot://app/v1/agent?id=<bot id>"}}
 {"routines":{"bot":"X Writer","items":[{"name":"Morning thread","schedule":"daily 09:00","next_run":"2026-11-02T09:00:00+02:00"}]}}
+{"groups":{"X Writer":"Content","Trends":"Research"}}
+{"floor_themes":{"Ranch":"office","Home IT":"casita"}}
 ```
 
 - **status**, posted on every status change of any bot. `bot` is the exact name, `status` is one of `working`, `idle`, `waiting_user`, `error`, `done`, `step` is what the bot does, at most 80 characters. `group` (optional) is the bot's team: each team gets its own floor of the office.
 - **roster**: the exact names of all your bots, so quiet bots show up too. Re-posted every morning.
-- **looks**: one look per bot. `shape` is one of `sphere`, `rounded_cube`, `pill`, `triangle`, `cone`, `pentagon`, `hexagon`, `star4`, `star6`, `clover`, `rounded_square`, `trio`. `accessory` is one of `none`, `glasses`, `stem`, `antenna`, `bow`. `color` is `#RRGGBB`. Details in `docs/AVATARS.md`. Re-posted every morning.
+- **looks**: one look per bot. `shape` is one of `sphere`, `cloud`, `rounded_square`, `star4`, `clover`, `bubble`, `flower`, `drop`, `pill`, `triangle`, `pentagon`, `star6`, `hexagon`, `rounded_cube`, `cone`, `trio`. `accessory` is one of `none`, `glasses`, `stem`, `antenna`, `bow`. `color` is `#RRGGBB`. Details in `docs/AVATARS.md`. Re-posted every morning.
 - **usage**: total used in percent, when it resets, and per bot. Fields the bot does not know are left out. Posted every 2 hours.
+- **groups**: map of bot name → floor label (used as written). Bots with no label share **Unassigned**.
+- **floor_themes** (optional): map of floor label → interior id (`office`, `ranch`, `casita`, …). See `docs/THEMES.md`.
 
 ### Privacy
 
-- The topic is the password. Anyone who has it can read your bots' statuses and post fake ones, so do not share the links. The dashboard link keeps the topic after the `#`, which the browser never sends to GitHub Pages; the wallpaper link carries it as `?feed=`, so treat that one as more exposed.
-- ntfy is not encrypted end to end: the ntfy server can read every line. Keep secrets and personal data out of `step`.
-- ntfy.sh keeps messages for 12 hours. The dashboard caches the last state in your browser, so it still shows your bots after that; clear the site data to remove it.
-- To change the topic, ask your bot to make a new one and run the setup again.
-- The dashboard sends one anonymous count per visit to the relay: a hash of the topic (never the topic), how many bots and teams, which parts of the setup it shows, phone or desktop, and how long it stayed open. No topic, IP address or user agent is stored.
+- **Private feed:** the read key is a password. Do not share the dashboard link. Keys stay after `#`, which the browser never sends to GitHub Pages. Your Worker can read every line; keep secrets out of `step`.
+- **Shared topic (legacy):** the topic is the password. Anyone who has it can read and post. ntfy is not encrypted end to end. ntfy.sh keeps messages for 12 hours; the dashboard also caches in your browser.
+- To rotate: issue a new feed key (or a new topic) and update bots and the link.
+- On the legacy topic path only, the dashboard sends one anonymous count per visit to the relay: a hash of the topic (never the topic), how many bots and teams, which parts of the setup it shows, phone or desktop, and how long it stayed open.
 
 ### Limits
 
