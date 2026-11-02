@@ -608,9 +608,11 @@ window.grokBot = { setBot, setTime };
 window.livelyPropertyListener = (name, value) => {
   if (name === 'botColor') setBot(Number(value) === 1 ? 'black' : 'white');
   if (name === 'feed') {                                 // the user's bots channel, typed into Lively's settings
-    const next = String(value ?? '').trim();
+    const typed = String(value ?? '').trim(), got = channelOf(typed);
+    if (typed && !got) return;                           // no channel in it: keep the one we have
+    const next = got ? got[0] : '';                      // a pasted link becomes just its channel
     // Lively sends every setting on load, an empty box included: that must not drop a channel the link already carries
-    if (next === (FEED || '') || (!next && HASH)) return;
+    if (next === (HASH?.[0] || FEED || '') || (!next && HASH)) return;
     try { if (next) localStorage.setItem('gbw.feed', next); else localStorage.removeItem('gbw.feed'); } catch { /* not remembered */ }
     // keep the query (the local server's ?key=); the channel goes in the hash, never sent to a server
     location.replace(location.pathname + location.search + (next ? `#${encodeURIComponent(next).replace(/%40/g, '@')}` : ''));
@@ -627,7 +629,19 @@ window.livelyPropertyListener = (name, value) => {
 const FEED_BASE = 'https://ntfy.sh/';                    // = FEED_BASE in office/lib/feedbase.js (a test keeps them equal)
 const RELAY = 'https://relay.0xcodila.com';              // our relay: bots set up with the current prompt post there
 const stored = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
-const HASH = /^#([A-Za-z0-9_-]{6,64})(?:@([^&#]+)|&ntfy=([^&]+))?$/.exec(location.hash);
+// The channel out of whatever holds it: the channel itself (gbw-…, maybe @<server>), or a whole dashboard or wallpaper
+// link with it after # (Grok Bot replies with the dashboard link, and people paste that into Lively's box as it is).
+// The same rule as the Mac app's Settings.channel(from:).
+const CHANNEL = /^([A-Za-z0-9_-]{6,64})(?:@([^&#\s]+)|&ntfy=([^&#\s]+))?$/;
+function channelOf(raw) {
+  let s = String(raw ?? '').trim();
+  try { s = decodeURIComponent(s); } catch { /* keep it as typed */ }
+  const found = CHANNEL.exec(s.slice(s.lastIndexOf('#') + 1));
+  if (found) return found;
+  const bare = /gbw-[A-Za-z0-9_-]{6,64}/.exec(s);
+  return bare && CHANNEL.exec(bare[0]);
+}
+const HASH = channelOf(location.hash);
 function httpsServer(raw) {
   try {
     const u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`);
@@ -635,7 +649,7 @@ function httpsServer(raw) {
   } catch { return null; }
 }
 const QFEED = params.get('feed') || '', QBASE = /[./:]/.test(QFEED) ? QFEED : '';   // a bare ?feed=<channel> is an older link
-const FEED = HASH?.[1] || (QBASE ? '' : QFEED) || stored('gbw.feed');
+const FEED = HASH?.[1] || (QBASE ? '' : QFEED) || channelOf(stored('gbw.feed'))?.[1] || null;
 const NTFY = httpsServer(decodeURIComponent(HASH?.[2] || HASH?.[3] || '') || QBASE || params.get('ntfy') || '') || stored('gbw.ntfy') || FEED_BASE.replace(/\/$/, '');
 if ((HASH || QFEED) && FEED) { try { localStorage.setItem('gbw.feed', FEED); localStorage.setItem('gbw.ntfy', NTFY); } catch { /* private mode: not remembered */ } }
 const CYR = {
