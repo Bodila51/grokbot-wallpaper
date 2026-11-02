@@ -19,6 +19,12 @@ const EYE_SHIFT = 0.034;            // m, at full sideways glance
 
 const ringTexture = makeRadialTexture([[0, 'rgba(255,255,255,0.95)'], [0.45, 'rgba(255,255,255,0.55)'], [1, 'rgba(255,255,255,0)']]);
 const shadowTexture = makeRadialTexture([[0, 'rgba(0,0,0,0.38)'], [0.6, 'rgba(0,0,0,0.12)'], [1, 'rgba(0,0,0,0)']]);
+// "done": a short soft flash around the bot and one ripple across the floor, in the done colour (no confetti)
+const haloTexture = makeRadialTexture([[0, 'rgba(255,255,255,0.9)'], [0.32, 'rgba(255,255,255,0.42)'], [1, 'rgba(255,255,255,0)']]);
+const rippleTexture = makeRadialTexture([[0, 'rgba(255,255,255,0)'], [0.6, 'rgba(255,255,255,0)'], [0.8, 'rgba(255,255,255,0.95)'],
+  [0.9, 'rgba(255,255,255,0.3)'], [1, 'rgba(255,255,255,0)']]);
+const RIPPLE_GEO = new THREE.PlaneGeometry(2, 2);
+const CELEBRATE_S = 0.95;
 
 export class Actor {
   // ctx: { parent: Object3D (the open-floor instance root), inst, pickables: Set, confetti(fn), cursor: {active,x,z}, dropDelay }
@@ -152,7 +158,7 @@ export class Actor {
     this.ring.position.y = 0.012 - (this.spot ? this.spot.pos.y : 0);
 
     if (statusChanged && prev) {
-      if (status === 'done') { this.ctx.confetti(this.root.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, 1.0, 0))); this.hop(0.45); }
+      if (status === 'done') { this.celebrate(); this.hop(0.45); }
       else if (status === 'waiting_user' || status === 'error') this.hop(0.3);
     }
   }
@@ -217,6 +223,42 @@ export class Actor {
   hop(height) {
     if (REDUCED || this.anim || this.retiring) return;
     this.anim = { kind: 'hop', t: 0, dur: 0.62, h: height };
+  }
+
+  /** a task is done: a soft flash around the bot, one ripple on the floor, happy squinting eyes */
+  celebrate() {
+    if (REDUCED || this.retiring) return;
+    this.endCelebration();
+    const color = new THREE.Color(STATUS_COLOR.done);
+    const ripple = new THREE.Mesh(RIPPLE_GEO, new THREE.MeshBasicMaterial({ map: rippleTexture, color, transparent: true, depthWrite: false, opacity: 0 }));
+    ripple.rotation.x = -Math.PI / 2;
+    ripple.position.y = this.ring.position.y + 0.003;
+    ripple.renderOrder = 2;
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTexture, color, transparent: true, depthWrite: false, opacity: 0 }));
+    halo.position.y = Math.max(0.3, this.tag.position.y - 0.24) * 0.55;          // the middle of the body
+    halo.renderOrder = 2;
+    this.root.add(ripple, halo);
+    this.fx = { t: 0, ripple, halo };
+    this.joy = 0.75;
+  }
+
+  endCelebration() {
+    if (!this.fx) return;
+    for (const o of [this.fx.ripple, this.fx.halo]) { o.removeFromParent(); o.material.dispose(); }
+    this.fx = null;
+  }
+
+  tickCelebration(dt) {
+    const f = this.fx;
+    f.t += dt;
+    const k = f.t / CELEBRATE_S;
+    if (k >= 1) { this.endCelebration(); return; }
+    const out = 1 - (1 - k) ** 3;                                   // the ripple runs out fast and slows down
+    f.ripple.scale.setScalar(0.4 + 1.6 * out);
+    f.ripple.material.opacity = 0.8 * (1 - k) ** 1.3;
+    const fk = Math.min(1, f.t / 0.55);                             // the flash: up and gone in about half a second
+    f.halo.scale.setScalar(0.8 + 1.3 * (1 - (1 - fk) ** 2));
+    f.halo.material.opacity = 0.6 * Math.sin(Math.PI * fk);
   }
 
   tick(dt, t) {
@@ -308,6 +350,7 @@ export class Actor {
     const wantRing = this.selected ? 0.8 : this.hovered ? Math.max(0.4, pulse) : pulse;
     this.ring.material.opacity = wantRing * clamp(sc, 0, 1);
     this.ring.scale.setScalar(this.selected ? 1.12 : 1);
+    if (this.fx) this.tickCelebration(dt);
 
     // tag follows the host floor: hidden while that floor is faded / lifted
     this.tag.visible = this.tagEl.dataset.mode !== 'off' && this.hostAlpha > 0.5 && !this.retiring && this.scaleS.x > 0.6;     // no tag before the blob has dropped in
@@ -332,6 +375,7 @@ export class Actor {
         if (b >= 1) this.blinkT = -1; else open *= Math.max(0.1, Math.abs(1 - 2 * b));
       }
     }
+    if (this.joy > 0) { this.joy -= dt; open = Math.min(open, 0.32); }   // just finished a task: happy, squinting
     const k = 1 / this.modelScale;
     this.eyes.forEach((e, i) => {
       e.scale.y = this.eyeBase[i] * open;
@@ -341,6 +385,7 @@ export class Actor {
   }
 
   dispose() {
+    this.endCelebration();
     for (const o of this.pickMeshes || []) this.ctx.pickables.delete(o);
     this.tagEl.remove();
     this.root.removeFromParent();
