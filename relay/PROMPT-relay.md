@@ -15,10 +15,9 @@ Fact C: Once a day on your first run, and whenever you create, change or delete 
 3. Post the roster: the exact name of every bot I have, including yourself:
 curl -s -d '{"roster":["Bot A","Bot B"]}' FEED
 
-4. Invent a look for each bot from its name and role.
-shape is one of: sphere, rounded_cube, pill, triangle, cone, pentagon, hexagon, star4, star6, clover, rounded_square, trio.
-accessory is one of: none, glasses, stem, antenna, bow.
-color is a six-digit hex colour with a number sign in front (for example a blue like 2D84F5). Post one line (several lines in the same format if it would pass 4000 characters):
+4. Give each bot the same look as its avatar in the Grok Bot app. If I attached a screenshot of my bots list, read every bot's avatar from it; for a bot that is not on it, pick a look from its name and role. Remember these looks, so you post the same ones every day.
+shape is one of: sphere (round), cloud (a soft lumpy cloud), rounded_square (a tilted rounded square), star4 (a four-point star), clover (four round lobes), bubble (round with one pointed corner), flower (a circle with a wavy edge), drop (a teardrop, point up), pill, triangle, pentagon, star6 (a spiky star), hexagon. A round avatar with a small stem is sphere with accessory stem; otherwise accessory is none.
+color is the closest of these, written with a number sign in front: 000000 black, A06B39 brown, FB2B3E red, FD690F orange, F59312 amber, 14C16F green, 13B7A2 teal, 1E86FC blue, 8F59F9 purple, F93498 pink, 959595 gray. Post one line (several lines in the same format if it would pass 4000 characters):
 curl -s -d '{"looks":{"Bot A":{"shape":"sphere","color":"<hex colour>","accessory":"none"}}}' FEED
 
 5. Sort my bots into 3 to 6 teams by their roles, with short English team names (each team gets its own floor on the dashboard). Put yourself and any helper or test bots into one team, for example Ops. Post them:
@@ -28,11 +27,11 @@ curl -s -d '{"groups":{"Bot A":"Content","Bot B":"Finance"}}' FEED
 curl -s -d '{"chat":{"Bot A":"<chat link>"}}' FEED
 
 7. Create two routines for yourself. The channel forgets messages after 12 hours, so (a few minutes off schedule is fine):
-Every day around 08:00 my local time: post steps 3, 4, 5 and 6 again.
+Every day around 08:00 my local time: post steps 3, 4, 5 and 6 again (step 4 with the same looks you remembered, a new look only for a new bot).
 Around 09:00, 13:00, 17:00 and 21:00 my local time: run your usage check, asking for the full list of bots (not only the top ones), and post one line. total_used_pct is the overall weekly limit used, in percent (the shared number, not only Grok Bot's part). bots is each of my bots' share of the usage this week, in percent (whole numbers are fine); leave out bots under 1%, rows that are not one of my bots (deleted bots, group chats, other people's bots) and any field you don't know:
 curl -s -d '{"type":"usage","total_used_pct":37,"resets_at":"<ISO time>","bots":{"Bot A":4.1}}' FEED
 
 8. Post one test status line for yourself, your own routines line, and one usage line now (as in step 7), so the dashboard shows the limit right away.
 
-9. Reply with LINK first, and one sentence saying it works like a password, so I should not share it. Then, only if something did not work, add a short list of the problems. Reply in the language I usually write to you in. Do not post any other secret to the channel or in your reply.
+9. Reply with LINK first, and one sentence saying it works like a password, so I should not share it. If I did not attach a screenshot, add one sentence: send me a screenshot of your bots list in the app and I will give every bot its real avatar. Then, only if something did not work, add a short list of the problems. Reply in the language I usually write to you in. Do not post any other secret to the channel or in your reply.
 ```
