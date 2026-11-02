@@ -159,6 +159,7 @@ function look(now) {
   // blinks every few seconds, sometimes twice; a big change of gaze comes with one
   if ((now > blinkAt || jump) && now - blinkStart > 600 && !REDUCED && !pinned) {
     blinkStart = now;
+    dispatchEvent(new Event('gbw:blink'));                 // the landing page gives it a sound
     if (blinkAt !== Infinity) blinkAt = now + (Math.random() < 0.2 ? 420 : (sleepy ? 4000 : 2400) + Math.random() * 4200);
   }
 }
@@ -436,6 +437,7 @@ for (const w of widgets) {
     w.el.setPointerCapture(e.pointerId);
     w.el.classList.add('is-dragging');
     tip.hidden = true;
+    dispatchEvent(new Event('gbw:grab'));
   });
   w.el.addEventListener('pointermove', (e) => {
     if (!drag || drag.w !== w || e.pointerId !== drag.id) return;
@@ -445,6 +447,7 @@ for (const w of widgets) {
     if (!drag || drag.w !== w) return;
     drag = null;
     w.el.classList.remove('is-dragging');
+    dispatchEvent(new Event('gbw:drop'));
     // near an edge it settles at the margin, like a widget on a desktop
     let x = w.el.offsetLeft, y = w.el.offsetTop;
     const m = u(MARGIN), sn = u(SNAP), W = w.el.offsetWidth, H = w.el.offsetHeight;

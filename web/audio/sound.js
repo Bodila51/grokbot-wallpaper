@@ -32,8 +32,13 @@ function readPrefs() {
 }
 function savePrefs() { try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefs)); } catch { /* private mode */ } }
 
-/** once per page: the speaker button (into `slot`), the gesture that unlocks audio, the tab-hidden fade */
-export function initSound({ slot } = {}) {
+/** turn the effects on or off from another page's own button (the landing's speaker); kept with the dashboard's choice */
+export function setFx(on) { set('fx', on); }
+export const fxOn = () => prefs.fx;
+
+/** once per page: the speaker button (into `slot`), the gesture that unlocks audio, the tab-hidden fade.
+ *  withMusic: false keeps the loop off (the landing has effects only) */
+export function initSound({ slot, withMusic = true } = {}) {
   if (enabled) return;
   enabled = true;
   if (slot) buildButton(slot);
@@ -45,7 +50,7 @@ export function initSound({ slot } = {}) {
     if (unlocked) return;
     unlocked = true;
     for (const t of ['pointerdown', 'keydown', 'touchend']) removeEventListener(t, unlock, true);
-    if (prefs.music) startMusic();
+    if (prefs.music && withMusic) startMusic();
   };
   for (const t of ['pointerdown', 'keydown', 'touchend']) addEventListener(t, unlock, true);
   document.addEventListener('visibilitychange', () => {
@@ -360,6 +365,52 @@ export const sfx = {
     if (kind === 'waiting_user') { chime(t, 88, 0.14); chime(t + 0.2, 84, 0.13); }
     else if (kind === 'error') { knock(t, 69, 0.16); knock(t + 0.17, 65, 0.15); }
     else if (kind === 'done') { chime(t, 84, 0.08, 0.2); chime(t + 0.08, 88, 0.08, 0.25); chime(t + 0.16, 91, 0.08, 0.3); }
+  },
+
+  // the landing: its switches, buttons and the wallpaper's blink (face.js tells the page with gbw:blink)
+  /** a switch moved to option i of n: a click and a note that falls as the options go on (morning to night, white to black) */
+  pick(i = 0, n = 2) {
+    if (!ready('pick', 60)) return;
+    const t = ctx.currentTime + 0.005, m = [84, 81, 79, 76][Math.round((i / Math.max(1, n - 1)) * 3)];
+    click(t, 0.32, 0.25);
+    bloop(t + 0.012, m, 0.13, 0.25);
+  },
+  /** a download or a button that leads somewhere: a click and a soft bell, then its fifth */
+  press() {
+    if (!ready('press', 150)) return;
+    const t = ctx.currentTime + 0.005;
+    click(t, 0.4);
+    chime(t + 0.02, 84, 0.08, 0);
+    chime(t + 0.09, 91, 0.05, 0.1);
+  },
+  /** the prompt is on the clipboard: a click and three notes up */
+  copied() {
+    if (!ready('copied', 300)) return;
+    const t = ctx.currentTime + 0.005;
+    click(t, 0.38);
+    chime(t + 0.03, 84, 0.08, 0.1); chime(t + 0.1, 88, 0.08, 0.15); chime(t + 0.17, 91, 0.08, 0.2);
+  },
+  /** a link to a part of the page: a click and the page sliding down */
+  nav() {
+    if (!ready('nav', 150)) return;
+    const t = ctx.currentTime + 0.005;
+    click(t, 0.3);
+    whoosh(t + 0.02, 'out', 0.6, 0.14);
+  },
+  /** a card picked up (a small lift) or put down (a soft landing) */
+  grab() { if (ready('grab', 80)) { const t = ctx.currentTime + 0.005; click(t, 0.3); bloop(t + 0.01, 79, 0.1, 0); } },
+  drop() {
+    if (!ready('drop', 80)) return;
+    const t = ctx.currentTime + 0.005;
+    click(t, 0.22);
+    osc('sine', 150, t, 0.16, voice(0, 0.1), 0.2, 0.003, 0.11).frequency.exponentialRampToValueAtTime(95, t + 0.1);
+  },
+  /** the eyes shut (a low tap that falls) and open (a lighter one that rises), in step with face.js's BLINK curve */
+  blink() {
+    if (!ready('blink', 300)) return;
+    const t = ctx.currentTime + 0.005, v = voice(0, 0.22);
+    osc('sine', hz(81), t, 0.1, v, 0.08, 0.002, 0.07).frequency.exponentialRampToValueAtTime(hz(76), t + 0.06);
+    osc('sine', hz(88), t + 0.19, 0.12, v, 0.05, 0.004, 0.08).frequency.exponentialRampToValueAtTime(hz(93), t + 0.25);
   },
 };
 
