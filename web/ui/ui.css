@@ -224,6 +224,15 @@
 .bhq-snd-row[aria-checked="true"] .bhq-snd-sw::after { translate: 14px 0; }
 .bhq-phone .bhq-snd { width: 42px; height: 42px; border-radius: 21px; }
 
+/* the share button (share/share.js opens its card under it) */
+.bhq-share {
+  flex: none; width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center;
+  color: var(--hi); cursor: pointer; transition: transform .3s var(--bhq-spring);
+}
+.bhq-share svg { translate: 0 -1px; }
+.bhq-share:active { transform: scale(.9); }
+.bhq-phone .bhq-share { width: 42px; height: 42px; border-radius: 21px; }
+
 /* ====================================================================== floors (elevator) */
 
 #floors { padding: 12px 10px 10px; border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; }

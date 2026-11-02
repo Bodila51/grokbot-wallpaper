@@ -486,6 +486,98 @@ function stepEffects(dt) {
   }
 }
 
+// ---------- share image (web/share/share.js) ----------
+
+// One still of the current floor for the share card, framed like a product shot: the floor, the stack under it and the
+// elevator fitted into `box` (fractions of the frame, y down: the caption gets the rest), on the same white studio
+// through the same post chain, at width x height, supersampled by `scale` when the GPU allows it.
+// Nothing private gets in: the in-scene tags are DOM and are never drawn into the canvas; the wall screen and the task
+// board are redrawn for this one frame without the floor's name, bot names or tasks; selection / hover rings, bots on
+// their way out and confetti are hidden. The live canvas is resized, drawn, copied out and restored inside this one
+// task, then the live view is drawn again before the browser paints, so nothing flickers.
+// Returns a <canvas> of width x height, or null while the office is still loading.
+export function captureScene({ width = 1600, height = 900, scale = 1, box = { x: 0.06, y: 0.06, w: 0.88, h: 0.76 } } = {}) {
+  const inst = building?.activeOpen();
+  if (!inst || !post) return null;
+  const pr = renderer.getPixelRatio();
+  const maxPx = Math.min(renderer.capabilities.maxTextureSize, renderer.capabilities.maxRenderbufferSize || Infinity);
+  const ss = Math.max(1, Math.min(scale, maxPx / width, maxPx / height));
+  const zoom0 = camera.zoom, pos0 = camera.position.clone();
+  const hidden = [];
+  const hide = (o) => { if (o?.visible) { o.visible = false; hidden.push(o); } };
+  for (const a of actors.values()) hide(a.ring);
+  for (const a of retiring) hide(a.root);
+  for (const fx of effects) hide(fx.group);
+  const walls = inst.walls, live = walls?.data;
+  try {
+    if (live) {
+      const anon = { ...live, floorName: `Floor ${building.activeIndex + 1}`, bots: live.bots.map((b) => ({ ...b, name: '', task: '', step: '' })) };
+      if (walls.screen) walls.drawScreen(anon);
+      if (walls.board) walls.drawBoard(anon);
+    }
+    renderer.setPixelRatio(ss);
+    renderer.setSize(width, height, false);
+    post.setSize(width, height);
+    frameShot(width / height, box);
+    focusV.set(0, building.cabinY.x + 0.7, 0).project(camera);
+    post.render(clamp(focusV.y * 0.5 + 0.5, 0, 1), 0, 1);
+    const out = document.createElement('canvas');
+    out.width = width; out.height = height;
+    const g = out.getContext('2d');
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(renderer.domElement, 0, 0, width, height);
+    return out;
+  } finally {
+    hidden.forEach((o) => { o.visible = true; });
+    if (live) {
+      if (walls.screen) walls.drawScreen(live);
+      if (walls.board) walls.drawBoard(live);
+    }
+    renderer.setPixelRatio(pr);
+    resize();
+    camera.zoom = zoom0;
+    camera.position.copy(pos0);
+    camera.updateProjectionMatrix();
+    focusV.set(0, building.cabinY.x + 0.7, 0).project(camera);
+    post.render(clamp(focusV.y * 0.5 + 0.5, 0, 1), 0, clamp(1.5 / camera.zoom, 0.25, 1));
+  }
+}
+
+// The camera at its home spot over the active floor, the frustum fitted to every visible building mesh (in view space,
+// so the iso silhouette is measured, not a world box) and placed so that silhouette is centred in `box`.
+const shotBox = new THREE.Box3();
+const shotCorner = new THREE.Vector3();
+function frameShot(aspect, box) {
+  camera.clearViewOffset();
+  camera.zoom = 1;
+  camera.position.set(HOME.x, building.activeY + HOME.y, HOME.z).addScaledVector(ISO_DIR, 80);
+  camera.updateMatrixWorld(true);
+  building.group.updateMatrixWorld(true);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  const walk = (o) => {
+    if (!o.visible) return;
+    if (o.isMesh && o.geometry) {
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      shotBox.copy(o.geometry.boundingBox);
+      for (let i = 0; i < 8; i++) {
+        shotCorner.set(i & 1 ? shotBox.max.x : shotBox.min.x, i & 2 ? shotBox.max.y : shotBox.min.y, i & 4 ? shotBox.max.z : shotBox.min.z)
+          .applyMatrix4(o.matrixWorld).applyMatrix4(camera.matrixWorldInverse);
+        x0 = Math.min(x0, shotCorner.x); x1 = Math.max(x1, shotCorner.x);
+        y0 = Math.min(y0, shotCorner.y); y1 = Math.max(y1, shotCorner.y);
+      }
+    }
+    for (const c of o.children) walk(c);
+  };
+  walk(building.group);
+  if (!Number.isFinite(x0)) { x0 = -VIEW_SPAN.w / 2; x1 = VIEW_SPAN.w / 2; y0 = -VIEW_SPAN.h / 2; y1 = VIEW_SPAN.h / 2; }
+  const fh = Math.max((y1 - y0) / box.h, (x1 - x0) / (box.w * aspect)), fw = fh * aspect;
+  camera.left = (x0 + x1) / 2 - (box.x + box.w / 2) * fw;
+  camera.right = camera.left + fw;
+  camera.top = (y0 + y1) / 2 + (box.y + box.h / 2) * fh;
+  camera.bottom = camera.top - fh;
+  camera.updateProjectionMatrix();
+}
+
 // ---------- loop ----------
 
 function updateCursorGround() {
