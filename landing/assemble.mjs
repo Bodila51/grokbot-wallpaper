@@ -17,6 +17,7 @@ const parts = [
   ['.', '.', /^PROMPT\.md$/, { optional: true }],          // the one setup prompt, shown on the landing as it is
   ['web/face', 'face', /^(index\.html|face\.css|face\.js)$/],
   ['web/data', 'data', /^demo-(state|looks)\.json$/],
+  ['lively/dist', 'download', /^grokbot-wallpaper-windows\.zip$/],   // the public Lively package (lively/build-public.ps1)
   // the 3D office: its page and modules (no *.html test pages), its demo data
   ['web', 'office', /^(index\.html|app\.js|styles\.css|wallpaper\.js|feed\.js)$/],
   ['web/lib', 'office/lib', /\.(js|css|json)$/, { deep: true, optional: true }],

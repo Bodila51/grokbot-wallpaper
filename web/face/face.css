@@ -186,4 +186,4 @@ svg.is-dark { filter: drop-shadow(0 0 .6px rgba(255, 255, 255, .6)); }
 .lite .bot, .lite .halo, .lite .card, .lite .card::before, .lite .card::after, .lite .bokeh i, .lite .stars i { animation: none !important; }
 .lite .stack { transform: none; }
 
-.meter[hidden] { display: none; }
+.meter[hidden], .stack[hidden] { display: none; }

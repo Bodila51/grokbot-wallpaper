@@ -1,7 +1,8 @@
 // Grok Bot Wallpaper: live eyes on the big sphere + the user's bots as live cards.
 // The eyes follow the cursor (Lively forwards mouse moves to the wallpaper); with no cursor around they wander,
-// blink, glance at whichever bot needs the user, and get sleepy when every bot is resting. Data: /api/state (the
-// journal server); without it, the bundled demo state animates on its own. At most 30 frames per second.
+// blink, glance at whichever bot needs the user, and get sleepy when every bot is resting. Data: the user's channel,
+// else /api/state (the journal server); with neither, only the bot and its sky, no cards. ?demo=1 animates the bundled
+// demo state instead. At most 30 frames per second.
 
 const STATUS = {
   working: { text: 'working', c: 'var(--working)' },
@@ -289,6 +290,7 @@ function statusOf(b) { return STATUS[b.effective_status || b.status] ? (b.effect
 const byName = (a, b) => String(a.name).localeCompare(String(b.name));
 
 function render(st) {
+  stack.hidden = false;                                  // the cards show once there is data (index.html starts them hidden)
   const bots = Object.values(st.bots || {});
   const counts = { working: 0, waiting_user: 0, error: 0, stuck: 0, done: 0, idle: 0 };
   for (const b of bots) counts[statusOf(b)]++;
@@ -725,16 +727,17 @@ async function connectFeed() {
   setInterval(() => { if (settleQuiet()) { remember(); render(state); } }, 60e3);
 }
 
-// ---------- data: the live server, else the bundled demo ----------
+// ---------- data: the live server, else nothing (only the bot); the bundled demo with ?demo=1 ----------
 async function poll() {
+  let res;
   try {
-    const res = await fetch('../api/state', { cache: 'no-store', credentials: 'same-origin' });
-    if (!res.ok) throw new Error(res.status);
+    res = await fetch('../api/state', { cache: 'no-store', credentials: 'same-origin' });
+    if (!res.ok) return;                                 // no Bot HQ server behind this page (GitHub Pages): no cards
     state = await res.json();
     render(state);
     setTimeout(poll, 2000);
   } catch {
-    if (!state) startDemo();
+    if (!res) setTimeout(poll, 10e3);                    // no answer at all: the local server is starting, try again
   }
 }
 async function startDemo() {
@@ -750,7 +753,7 @@ async function startDemo() {
   }, 3500);
 }
 if (FEED) connectFeed();
-else {
+else if (params.get('demo') === '1') {                   // made-up bots, only when a link asks for them
   fetch('../data/demo-looks.json').then((r) => (r.ok ? r.json() : {})).then((j) => { looks = j.looks || j || {}; if (state) { crew = ''; needs.innerHTML = ''; render(state); } }).catch(() => {});
-  poll();
-}
+  startDemo();
+} else poll();

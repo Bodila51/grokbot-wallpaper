@@ -88,3 +88,16 @@ New key: delete `data\view-key.txt` and restart the server (`uninstall.cmd`, `in
 | `reload.cmd` | reloads the wallpapers in Lively |
 | `LivelyInfo.json` | the wallpaper description for Lively (a web wallpaper: `index.html` opens the live page) |
 | `LivelyProperties.json` | the **Customise Wallpaper** settings (`botColor`, `feed`); the page gets them through `livelyPropertyListener` |
+| `build-public.ps1` | builds `dist\grokbot-wallpaper-windows.zip`, the package for everyone (below) |
+| `public\` | that package's files: `index.html`, `LivelyInfo.json`, `LivelyProperties.json`, `thumbnail.jpg`, `preview.gif` |
+
+## The public package (anyone, no server)
+
+`lively\dist\grokbot-wallpaper-windows.zip` is what the site offers at `download/grokbot-wallpaper-windows.zip`
+(`landing\assemble.mjs`; the zip is committed, it has no key). Drag it into Lively. Its `index.html` waits until
+GitHub Pages answers (at sign-in Lively often starts before the network), then opens
+`https://bodila51.github.io/grokbot-wallpaper/face/` with the Lively settings in the link (`?bot=black`, `#<channel>`);
+later changes in **Customise** go straight to `face.js`. With no channel the wallpaper shows only the bot and its sky.
+The **Your bots channel** box takes the channel name (`<topic>` or `<topic>@<https host>`), not a whole link.
+`thumbnail.jpg` and `preview.gif` are renders of the wallpaper at dusk; rebuild after editing `public\`:
+`powershell -ExecutionPolicy Bypass -File lively\build-public.ps1`
