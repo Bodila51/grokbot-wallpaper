@@ -26,6 +26,8 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
     var onLoad: (() -> Void)?
     private var url: URL
     private var retry: Timer?
+    private let scripts: WKUserContentController
+    private var forgetting = false
 
     init(frame: NSRect, url: URL) {
         self.url = url
@@ -33,8 +35,8 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()                    // the page keeps card positions in localStorage
         config.mediaTypesRequiringUserActionForPlayback = []
-        config.userContentController.addUserScript(
-            WKUserScript(source: CursorFeed.pageHelper, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        config.userContentController.addUserScript(Wallpaper.helperScript())
+        scripts = config.userContentController
         let web = WallpaperWebView(frame: NSRect(origin: .zero, size: frame.size), configuration: config)
         web.allowsMagnification = false
         web.allowsBackForwardNavigationGestures = false
@@ -77,9 +79,34 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
             cancelRetry()
             webView.reloadFromOrigin()
         } else {
-            load(newURL)
+            show(newURL)
         }
     }
+
+    /// A new address from the menu. When only the hash (the bots channel) changes, WebKit would just move to the
+    /// anchor, but the page reads its channel on load: so the page changes its own address and reloads, like it
+    /// does for Lively's channel setting.
+    func show(_ newURL: URL) {
+        let hashOnly = newURL.fragment != nil && webView.url.map { Wallpaper.page($0) == Wallpaper.page(newURL) } == true
+        url = newURL
+        cancelRetry()
+        guard hashOnly else { return load() }
+        let quoted = newURL.absoluteString.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "'", with: "\\'")
+        webView.evaluateJavaScript("location.replace('\(quoted)');location.reload()", completionHandler: nil)
+    }
+
+    /// An empty «Bots channel…»: before the next load, wipe the channel the page remembers in localStorage.
+    func forgetChannel() {
+        scripts.addUserScript(WKUserScript(source: "try{localStorage.removeItem('gbw.feed');localStorage.removeItem('gbw.ntfy')}catch(e){}",
+                                           injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        forgetting = true
+    }
+
+    private static func helperScript() -> WKUserScript {
+        WKUserScript(source: CursorFeed.pageHelper, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+    }
+
+    private static func page(_ u: URL) -> String { u.absoluteString.components(separatedBy: "#")[0] }
 
     /// The bot's colour picked in the menu, re-applied after every load (the page's own choice if none was picked).
     func applyBot() {
@@ -121,6 +148,11 @@ final class Wallpaper: NSObject, WKNavigationDelegate, WKUIDelegate {
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         cancelRetry()
+        if forgetting {                                        // the wipe ran on this load: back to the helper alone
+            forgetting = false
+            scripts.removeAllUserScripts()
+            scripts.addUserScript(Wallpaper.helperScript())
+        }
         applyBot()
         onLoad?()
     }

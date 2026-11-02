@@ -115,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(blackBotItem)
         menu.addItem(.separator())
         menu.addItem(menuItem("Reload wallpaper", #selector(reloadWallpapers)))
+        menu.addItem(menuItem("Bots channel…", #selector(editChannel)))
         menu.addItem(menuItem("Wallpaper address…", #selector(editAddress)))
         menu.addItem(.separator())
         menu.addItem(loginItem)
@@ -186,6 +187,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func reloadWallpapers() {
         let url = Settings.url
         for wallpaper in wallpapers.values { wallpaper.refresh(url) }
+    }
+
+    // The Mac side of Lively's channel box: the channel goes into the wallpaper address as …/face/#<channel>.
+    @objc private func editChannel() {
+        let alert = NSAlert()
+        alert.messageText = "Bots channel"
+        alert.informativeText = "Paste your channel (gbw-…) or any dashboard or wallpaper link with it. "
+            + "Leave it empty to show the wallpaper without bots."
+        let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 440, height: 24))
+        field.stringValue = Settings.url.fragment.flatMap { Settings.channel(from: "#" + $0) } ?? ""
+        field.placeholderString = "gbw-…"
+        alert.accessoryView = field
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = field
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+
+        let input = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let channel = input.isEmpty ? nil : Settings.channel(from: input)
+        if !input.isEmpty, channel == nil {
+            showAlert("That has no channel in it", "Look for the part that starts with gbw-.")
+            return
+        }
+        let url = Settings.withChannel(channel, on: Settings.url)
+        Settings.url = url
+        for wallpaper in wallpapers.values {
+            if channel == nil { wallpaper.forgetChannel() }
+            wallpaper.show(url)
+        }
     }
 
     @objc private func editAddress() {
@@ -291,6 +322,33 @@ enum Settings {
         guard let url = URL(string: parts.joined(separator: "#")), let scheme = url.scheme?.lowercased(),
               scheme == "http" || scheme == "https", url.host != nil else { return nil }
         return url
+    }
+
+    /// The bots channel in what people paste: gbw-…, or any dashboard, wallpaper or ntfy link with it. A link's own
+    /// mailbox (#gbw-…@host, #gbw-…&ntfy=…) is kept. nil: there is no channel in it.
+    static func channel(from input: String) -> String? {
+        let text = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hashForm = "^[A-Za-z0-9_-]{6,64}(@[^&#\\s]+|&ntfy=[^&#\\s]+)?$"     // = the page's own #<channel> rule
+        if let hashStart = text.firstIndex(of: "#") {
+            let hash = String(text[text.index(after: hashStart)...])
+            if let found = firstMatch(hashForm, in: hash.removingPercentEncoding ?? hash) { return found }
+        }
+        return firstMatch(hashForm, in: text) ?? firstMatch("gbw-[A-Za-z0-9_-]{6,64}", in: text)
+    }
+
+    /// The wallpaper address with this channel as its hash, or with none; the query (a local server's ?key=) stays.
+    static func withChannel(_ channel: String?, on base: URL) -> URL {
+        let page = base.absoluteString.components(separatedBy: "#")[0]
+        guard let channel, !channel.isEmpty else { return URL(string: page) ?? base }
+        let hash = channel.addingPercentEncoding(withAllowedCharacters: .urlFragmentAllowed) ?? channel
+        return URL(string: page + "#" + hash) ?? base
+    }
+
+    private static func firstMatch(_ pattern: String, in text: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+              let range = Range(match.range, in: text) else { return nil }
+        return String(text[range])
     }
 
     /// "white" or "black" once picked in the menu; nil leaves the page's own choice (?bot=…, its localStorage).
