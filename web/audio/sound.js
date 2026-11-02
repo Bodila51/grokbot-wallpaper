@@ -38,6 +38,8 @@ export function initSound({ slot } = {}) {
   enabled = true;
   if (slot) buildButton(slot);
   const unlock = () => {
+    // iPhone: play as media, so the silent switch doesn't mute the dashboard (Safari 16.4+)
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* older Safari */ }
     if (!boot()) return;
     ctx.resume?.();
     if (unlocked) return;
