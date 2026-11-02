@@ -7,6 +7,8 @@ import WebKit
 @MainActor
 final class DesktopMatcher: NSObject {
     private var latest: [CGDirectDisplayID: URL] = [:]
+    private var pending: [CGDirectDisplayID: URL] = [:]       // set, but not yet seen taking effect
+    private var attempts: [CGDirectDisplayID: Int] = [:]
 
     private static var folder: URL {
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
@@ -14,15 +16,11 @@ final class DesktopMatcher: NSObject {
         return support.appendingPathComponent("Grok Bot Wallpaper", isDirectory: true)
     }
 
-    private static let fill: [NSWorkspace.DesktopImageOptionKey: Any] = [
-        .imageScaling: NSImageScaling.scaleProportionallyUpOrDown.rawValue,
-        .allowClipping: true,
-    ]
-
     /// Snapshots this display's page and makes it the display's desktop picture.
     func update(_ screen: NSScreen, id: CGDirectDisplayID, from webView: WKWebView) {
         let config = WKSnapshotConfiguration()
-        config.snapshotWidth = NSNumber(value: Double(screen.frame.width))   // 1 px per point is plenty for a tint
+        // one pixel per point: a Retina snapshot has 4× the pixels for a tint that is never seen sharp
+        config.snapshotWidth = NSNumber(value: Double(screen.frame.width / max(1, screen.backingScaleFactor)))
         webView.takeSnapshot(with: config) { [weak self] image, _ in
             guard let self, let image else { return }
             self.apply(image, to: screen, id: id)
@@ -34,14 +32,15 @@ final class DesktopMatcher: NSObject {
         for (screen, id) in screens {
             guard let file = latest[id] else { continue }
             let current = NSWorkspace.shared.desktopImageURL(for: screen)
-            if current == file { continue }
+            if let current, DesktopMatcher.same(current, file) { continue }
             remember(current, for: id)
-            try? NSWorkspace.shared.setDesktopImageURL(file, for: screen, options: DesktopMatcher.fill)
+            try? NSWorkspace.shared.setDesktopImageURL(file, for: screen, options: [:])
         }
     }
 
     /// Gives every display its own picture back, unless the user picked a new one meanwhile.
     func restore(_ screens: [(NSScreen, CGDirectDisplayID)]) {
+        pending = [:]
         for (screen, id) in screens {
             guard let original = Settings.originalDesktop(for: id) else { continue }
             if let current = NSWorkspace.shared.desktopImageURL(for: screen), DesktopMatcher.isOurs(current) {
@@ -54,19 +53,54 @@ final class DesktopMatcher: NSObject {
 
     private func apply(_ image: NSImage, to screen: NSScreen, id: CGDirectDisplayID) {
         guard let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil),
-              let png = NSBitmapImageRep(cgImage: cg).representation(using: .png, properties: [:]) else { return }
+              let jpeg = NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.85])
+        else { return }
         let current = NSWorkspace.shared.desktopImageURL(for: screen)
         remember(current, for: id)
-        // macOS keeps showing a picture whose file name did not change: alternate between two names
-        let index = current?.lastPathComponent == "desktop-\(id)-0.png" ? 1 : 0
-        let file = DesktopMatcher.folder.appendingPathComponent("desktop-\(id)-\(index).png")
+        // a new name every time: macOS keeps showing (and caches) a picture whose file name it has seen before
+        let stamp = Int(Date().timeIntervalSince1970 * 1000)
+        let file = DesktopMatcher.folder.appendingPathComponent("desktop-\(id)-\(stamp).jpg")
         do {
             try FileManager.default.createDirectory(at: DesktopMatcher.folder, withIntermediateDirectories: true)
-            try png.write(to: file, options: .atomic)
-            try NSWorkspace.shared.setDesktopImageURL(file, for: screen, options: DesktopMatcher.fill)
+            try jpeg.write(to: file, options: .atomic)
+            try NSWorkspace.shared.setDesktopImageURL(file, for: screen, options: [:])
             latest[id] = file
+            pending[id] = file
+            attempts[id] = 0
+            NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(verify), object: nil)
+            perform(#selector(verify), with: nil, afterDelay: 2)
+            removeOld(for: id, keeping: [file, current])
         } catch {
             NSLog("Grok Bot Wallpaper: desktop picture not set: %@", error.localizedDescription)
+        }
+    }
+
+    // macOS now and then drops a change without an error: check that it took, set it again (up to 3 times), log it.
+    @objc private func verify() {
+        let present = Set(NSScreen.screens.compactMap { $0.displayID })
+        pending = pending.filter { present.contains($0.key) }
+        for screen in NSScreen.screens {
+            guard let id = screen.displayID, let file = pending[id] else { continue }
+            let tries = attempts[id, default: 0]
+            if let current = NSWorkspace.shared.desktopImageURL(for: screen), DesktopMatcher.same(current, file) {
+                pending[id] = nil
+            } else if tries >= 3 {
+                NSLog("Grok Bot Wallpaper: macOS did not take the desktop picture %@", file.path)
+                pending[id] = nil
+            } else {
+                attempts[id] = tries + 1
+                try? NSWorkspace.shared.setDesktopImageURL(file, for: screen, options: [:])
+            }
+        }
+        if !pending.isEmpty { perform(#selector(verify), with: nil, afterDelay: 2) }
+    }
+
+    // Our older snapshots for this display go, except the one on screen right now.
+    private func removeOld(for id: CGDirectDisplayID, keeping keep: [URL?]) {
+        let kept = Set(keep.compactMap { $0?.lastPathComponent })
+        let files = (try? FileManager.default.contentsOfDirectory(at: DesktopMatcher.folder, includingPropertiesForKeys: nil)) ?? []
+        for file in files where file.lastPathComponent.hasPrefix("desktop-\(id)-") && !kept.contains(file.lastPathComponent) {
+            try? FileManager.default.removeItem(at: file)
         }
     }
 
@@ -77,5 +111,9 @@ final class DesktopMatcher: NSObject {
 
     private static func isOurs(_ url: URL) -> Bool {
         url.standardizedFileURL.path.hasPrefix(folder.standardizedFileURL.path)
+    }
+
+    private static func same(_ a: URL, _ b: URL) -> Bool {
+        a.standardizedFileURL.path == b.standardizedFileURL.path
     }
 }

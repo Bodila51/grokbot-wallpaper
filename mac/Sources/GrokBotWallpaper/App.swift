@@ -432,7 +432,7 @@ enum Settings {
     static var pauseWhenCovered: Bool { UserDefaults.standard.object(forKey: "pauseWhenCovered") as? Bool ?? true }
 }
 
-private extension NSScreen {
+extension NSScreen {
     var displayID: CGDirectDisplayID? {
         (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
     }
