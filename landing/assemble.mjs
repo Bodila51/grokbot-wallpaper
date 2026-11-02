@@ -56,4 +56,13 @@ for (const [from, to, keep, { deep = false, optional = false } = {}] of parts) {
   if (!n && !optional) throw new Error(`nothing to copy from ${from}/ (expected ${keep})`);
   total += n;
 }
+// The setup prompt, written into the landing itself: an agent handed the link (Grok Bot, Claude Code) reads it there
+// without pressing the copy button. PROMPT.md stays the one source.
+const page = path.join(out, 'index.html'), promptFile = path.join(repo, 'PROMPT.md');
+if (fs.existsSync(promptFile)) {
+  const md = fs.readFileSync(promptFile, 'utf8');
+  const fenced = md.match(/```[^\n]*\n([\s\S]*?)```/);
+  const text = (fenced ? fenced[1] : md).trim().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  fs.writeFileSync(page, fs.readFileSync(page, 'utf8').replace(/<!-- PROMPT[^>]*-->/, () => text));
+}
 console.log(`assembled ${total} files into ${out}`);

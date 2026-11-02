@@ -225,6 +225,18 @@ a { color: inherit; text-decoration: none; }
 .closeup { position: absolute; left: 0; right: var(--tile-pad); top: var(--tile-pad); bottom: 0; overflow: hidden; border-radius: 14px 14px 0 0; background: #DCE6F4; }
 .closeup iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; pointer-events: none; }
 
+/* ---------- for AI agents: what to do when someone hands them this page, with the setup prompt in the page itself
+   (landing/assemble.mjs writes it in), so a bot that reads the link needs no button ---------- */
+.agents { padding: clamp(48px, 6vw, 88px) var(--edge) 0; }
+.agents__tile { padding: 24px var(--tile-pad) var(--tile-pad); }
+.agents h2 { font-size: 22px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+.agents .tile__copy { padding: 10px 0 0; max-width: 72ch; font-size: 15px; line-height: 22px; }
+.agents ol { margin-top: 14px; padding-left: 20px; display: grid; gap: 8px; max-width: 80ch; font-size: 15px; line-height: 22px; color: var(--soft); }
+.agents li b, .agents h3 { color: var(--ink); font-weight: 600; }
+.agents code { font: 13px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink); overflow-wrap: anywhere; }
+.agents h3 { margin-top: 20px; font-size: 15px; }
+.agents pre { margin: 10px 0 0; max-height: 260px; overflow: auto; padding: 16px; border-radius: 14px; background: var(--ground); font: 12.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); }
+
 footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; padding: 28px calc(var(--edge) + var(--tile-pad)) 36px; font-size: 14px; color: var(--soft); }
 footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
 @media (pointer: coarse) { footer .links a { padding-block: 10px; } }   /* a finger-sized target, the line stays quiet */
@@ -418,6 +430,20 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
       </div>
     </div>
   </section>
+
+  <section class="agents" id="for-agents" aria-labelledby="agents-title">
+    <div class="tile agents__tile">
+      <h2 id="agents-title">For AI agents</h2>
+      <p class="tile__copy">Someone gave you this page and asked you to set it up? Here is what to do.</p>
+      <ol>
+        <li><b>Grok Bot:</b> run the setup prompt below, step by step. It connects all of the user’s bots to a private channel and ends with the user’s link. That link works like a password: give it only to the user.</li>
+        <li><b>An agent on the user’s computer</b> (Claude Code and others). Windows 10 or 11: the user installs Lively Wallpaper (free, Microsoft Store); download <code>https://0xcodila.com/grokbot-wallpaper/download/grokbot-wallpaper-windows.zip</code> and ask the user to drag it into Lively (Lively can’t import it from the command line). macOS 13 or later: download <code>https://github.com/Bodila51/grokbot-wallpaper/releases/latest/download/GrokBotWallpaper.dmg</code>, copy Grok Bot Wallpaper.app to /Applications and open it; the user approves it once in System Settings → Privacy &amp; Security → Open Anyway.</li>
+        <li><b>Bots on the wallpaper:</b> the user pastes the link from Grok Bot into Lively (Customise → Your bots channel) or, on a Mac, into the 👀 menu-bar icon → Bots channel….</li>
+      </ol>
+      <h3>The setup prompt for Grok Bot</h3>
+      <pre id="setup-prompt"><!-- PROMPT: landing/assemble.mjs writes PROMPT.md's prompt here --></pre>
+    </div>
+  </section>
 </main>
 
 <footer class="quiet">
@@ -608,11 +634,12 @@ const io = 'IntersectionObserver' in window && new IntersectionObserver((list) =
 }), { rootMargin: '0px 0px -10% 0px' });
 document.querySelectorAll('.rise').forEach((el) => (io ? io.observe(el) : el.classList.add('is-in')));
 // ---------- the setup prompt: PROMPT.md's first fenced block, copied for Grok Bot ----------
-const copyPrompt = document.getElementById('copy-prompt');
-let promptText = null;
-fetch('PROMPT.md', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : Promise.reject(r.status))).then((md) => {
+const copyPrompt = document.getElementById('copy-prompt'), promptBox = document.getElementById('setup-prompt');
+let promptText = promptBox.textContent.trim() || null;   // written into the page by assemble.mjs; fetched when not
+if (!promptText) fetch('PROMPT.md', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : Promise.reject(r.status))).then((md) => {
   const fenced = md.match(/```[^\n]*\n([\s\S]*?)```/);
   promptText = (fenced ? fenced[1] : md).trim();
+  promptBox.textContent = promptText;
 }).catch(() => { copyPrompt.textContent = 'Open the setup prompt'; });
 copyPrompt.addEventListener('click', async () => {
   if (!promptText) { window.open('https://github.com/Bodila51/grokbot-wallpaper/blob/main/PROMPT.md', '_blank', 'noopener'); return; }
