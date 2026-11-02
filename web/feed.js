@@ -26,8 +26,9 @@ import { FEED_BASE, feedFromLink } from './lib/feedbase.js';
 const RELAY = 'https://relay.0xcodila.com', NTFY = 'https://ntfy.sh';
 const MAX_LINE = 4096, KEEP = 600, TICK_MS = 30e3, DAY_MS = 24 * 3600e3, PING_MS = 60e3;
 const QUIET_MS = 20 * 60e3, CHECK_MS = 6 * 3600e3;    // a silent worker turns idle; a status check stays up this long
-const HANDMADE = new Set(['grok-bot', 'jevopus', 'x-writer', 'banner-visuals', 'analytics-analyst', 'competitor-watch', 'qt-scout',
-  'ideas-sparring', 'bookmarks-brain', 'codila-x-researcher', 'trendy-x', 'substack', 'x-ads-manager', 'warren-buffett', 'finance-team']);   // assets/blobs/<id>.glb
+// Everyone's bots, ours included, are built from their look (the app's 14 avatars and 11 colours, read from a
+// screenshot), so a bot in the office is the bot in the app. The hand-made GLBs in assets/blobs/ stay for the local server.
+const HANDMADE = new Set();
 
 /** The page's hash and query -> { topic, servers: [mailboxes, no trailing slash] }, or null without a topic.
  *  A plain link reads both mailboxes; a link that names one reads that one. */
@@ -44,7 +45,7 @@ export async function connectFeed({ topic, servers }, onState) {
   const cacheKey = usual ? `bothq.feed.${topic}` : `bothq.feed.${servers[0]}.${topic}`;
   const oldKey = `bothq.feed.${NTFY}.${topic}`;         // the cache of the first single-mailbox office (ntfy.sh only)
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Sofia';
-  const store = new StateStore({ tz, quietIdleMs: QUIET_MS, hasAvatar: (id) => HANDMADE.has(id) });   // others get a generated blob, no 404 probe
+  const store = new StateStore({ tz, quietIdleMs: QUIET_MS, hasAvatar: (id) => HANDMADE.has(id) });   // no GLB probe: every bot is generated from its look
   const cfg = {};                                        // per bot name: { look, chat_url } -> the store's bots config
   const routines = new Map();                            // bot id -> { name, items }
   let check = null;                                      // the latest status check: { ms, names }
