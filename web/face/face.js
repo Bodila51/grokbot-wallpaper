@@ -587,9 +587,11 @@ window.livelyPropertyListener = (name, value) => {
   if (name === 'botColor') setBot(Number(value) === 1 ? 'black' : 'white');
   if (name === 'feed') {                                 // the user's bots channel, typed into Lively's settings
     const next = String(value ?? '').trim();
-    if (next === (FEED || '')) return;
+    // Lively sends every setting on load, an empty box included: that must not drop a channel the link already carries
+    if (next === (FEED || '') || (!next && HASH)) return;
     try { if (next) localStorage.setItem('gbw.feed', next); else localStorage.removeItem('gbw.feed'); } catch { /* not remembered */ }
-    location.replace(location.pathname + (next ? `#${encodeURIComponent(next).replace(/%40/g, '@')}` : ''));   // in the hash: never sent to a server
+    // keep the query (the local server's ?key=); the channel goes in the hash, never sent to a server
+    location.replace(location.pathname + location.search + (next ? `#${encodeURIComponent(next).replace(/%40/g, '@')}` : ''));
     if (next) location.reload();                         // a hash change alone doesn't reload the page
   }
 };
