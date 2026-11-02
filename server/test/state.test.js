@@ -348,6 +348,8 @@ test('look: normLook edge cases', () => {
   assert.deepEqual(normLook({ shape: 'banana', color: '#00ff00' }), { shape: null, color: '#00FF00', accessory: 'none' });
   assert.deepEqual(normLook({ shape: ' STAR-4 '.replace('-', ''), color: ' #0c0c0e ' }), { shape: 'star4', color: '#0C0C0E', accessory: 'none' });
   assert.equal(normLook({ shape: 'sphere', color: 'javascript:alert(1)' }).color, null);
+  assert.equal(normLook({ shape: 'pill', color: '2d9cdb' }).color, '#2D9CDB', 'the leading # is optional');
+  assert.equal(normLook({ shape: 'pill', color: '#2d9cdbff' }).color, null);
   assert.equal(normLook({ shape: 42, color: 42 }), null);
 });
 

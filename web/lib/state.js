@@ -61,7 +61,7 @@ export function normalizeStatus(raw, hasStep, previous) {
 }
 
 const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
-const HEX6 = /^#[0-9a-f]{6}$/i;
+const HEX6 = /^#?[0-9a-f]{6}$/i;                    // look colours: the leading # is optional (Grok Bot sometimes drops it)
 
 // Generated avatars (docs/AVATARS.md). Closed vocabularies: keep in sync with web/scene/looks.js (a test compares them).
 export const LOOK_SHAPES = [
@@ -72,7 +72,7 @@ export const LOOK_ACCESSORIES = ['none', 'glasses', 'stem', 'antenna', 'bow'];
 
 /**
  * bots.json `look`: { shape, color, accessory }. Each field is validated on its own: unknown shape -> null,
- * colour must be #RRGGBB (else null), unknown accessory -> 'none'. A look with neither a usable shape nor a
+ * colour must be #RRGGBB or RRGGBB (else null), unknown accessory -> 'none'. A look with neither a usable shape nor a
  * usable colour carries no information and becomes null (the browser then derives both from the bot id).
  */
 export function normLook(v) {
@@ -82,7 +82,7 @@ export function normLook(v) {
     const s = v.shape.trim().toLowerCase().replace(/[\s-]+/g, '_');
     if (LOOK_SHAPES.includes(s)) shape = s;
   }
-  const color = typeof v.color === 'string' && HEX6.test(v.color.trim()) ? v.color.trim().toUpperCase() : null;
+  const color = typeof v.color === 'string' && HEX6.test(v.color.trim()) ? `#${v.color.trim().replace('#', '').toUpperCase()}` : null;
   let accessory = 'none';
   if (typeof v.accessory === 'string') {
     const a = v.accessory.trim().toLowerCase();

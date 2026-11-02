@@ -613,24 +613,42 @@ function partsStage(shape, tilt, accessory) {
 
 // ---------------------------------------------------------------- materials (cached per colour)
 
+// Any user picks the colour, so the face and the accessories adapt to it the way the brand's two Grok Bots do:
+// white eyes on a colour or on black, glossy black eyes on a near-white body (the white bot); black glasses and
+// stem, light ones on a near-black body. Thresholds are relative luminance (linear): warm cream (#F6DCC2, ~0.73)
+// keeps white eyes like the hand-made warren-buffett, #F3E7DB (~0.81) and lighter get dark eyes.
+const LIGHT_BODY = 0.78, DARK_BODY = 0.06;
+export function bodyTone(hex) {
+  const c = new THREE.Color(hex);                                       // linear (colour management is on)
+  const L = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  return L >= LIGHT_BODY ? 'light' : L < DARK_BODY ? 'dark' : 'mid';
+}
+
 const bodyMats = new Map();
 function bodyMaterial(hex) {
   if (!bodyMats.has(hex)) bodyMats.set(hex, new THREE.MeshPhysicalMaterial({ color: hex, roughness: 0.3, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06 }));
   return bodyMats.get(hex);
 }
 
-let eyeMat = null;
-function eyeMaterial() {
-  if (!eyeMat) eyeMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.22, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.05, emissive: new THREE.Color().setRGB(0.1, 0.1, 0.1, THREE.LinearSRGBColorSpace) });
-  return eyeMat;
+const eyeMats = new Map();
+function eyeMaterial(dark = false) {
+  if (!eyeMats.has(dark)) eyeMats.set(dark, new THREE.MeshPhysicalMaterial(dark
+    ? { color: '#141417', roughness: 0.2, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04 }
+    : { color: 0xffffff, roughness: 0.22, metalness: 0, clearcoat: 0.6, clearcoatRoughness: 0.05, emissive: new THREE.Color().setRGB(0.1, 0.1, 0.1, THREE.LinearSRGBColorSpace) }));
+  return eyeMats.get(dark);
 }
 
 const darkMats = new Map();
-function darkMaterial(kind) {
-  if (!darkMats.has(kind)) darkMats.set(kind, new THREE.MeshPhysicalMaterial(kind === 'glasses'
-    ? { color: '#101012', roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.06 }
-    : { color: '#3A3D40', roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.06 }));
-  return darkMats.get(kind);
+function darkMaterial(kind, onDark = false) {
+  const key = `${kind}|${onDark}`;
+  if (!darkMats.has(key)) darkMats.set(key, new THREE.MeshPhysicalMaterial(onDark
+    ? (kind === 'glasses'
+      ? { color: '#ECECEF', roughness: 0.32, clearcoat: 0.8, clearcoatRoughness: 0.05 }
+      : { color: '#B9BBC1', roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.06 })
+    : (kind === 'glasses'
+      ? { color: '#101012', roughness: 0.45, clearcoat: 0.4, clearcoatRoughness: 0.06 }
+      : { color: '#3A3D40', roughness: 0.5, clearcoat: 0.3, clearcoatRoughness: 0.06 })));
+  return darkMats.get(key);
 }
 
 const accentMats = new Map();
@@ -639,12 +657,14 @@ function accentMaterial(hex) {
   return accentMats.get(hex);
 }
 
-/** contrasting accent for bows / antenna balls: the candidate furthest from the body colour (redmean distance) */
-const ACCENTS = ['#FFFFFF', '#FFD60A', '#FF2D6F', '#2D7BFF', '#16161A', '#2FD067'];
+/** contrasting accent for bows / antenna balls: the candidate furthest from the body colour (redmean distance).
+ * Always a colour (a black bow on a white blob reads as a bug), white only on near-black bodies. */
+const ACCENTS = ['#FFD60A', '#FF2D6F', '#2D7BFF', '#2FD067'];
 export function accentFor(hex) {
   const c = new THREE.Color(hex).convertLinearToSRGB();                // 0..1 sRGB
-  let best = ACCENTS[0], bestD = -1;
-  for (const a of ACCENTS) {
+  const list = bodyTone(hex) === 'dark' ? ['#FFFFFF', ...ACCENTS] : ACCENTS;
+  let best = list[0], bestD = -1;
+  for (const a of list) {
     const o = new THREE.Color(a).convertLinearToSRGB();
     const rm = (c.r + o.r) / 2;
     const d = (2 + rm) * (c.r - o.r) ** 2 + 4 * (c.g - o.g) ** 2 + (3 - rm) * (c.b - o.b) ** 2;
@@ -679,20 +699,24 @@ export function generateBlob({ shape, color, accessory, seed } = {}) {
   const col = normColor(color) ?? PALETTE[hash32(`color:${sd}`) % PALETTE.length];
   const acc = normAccessory(accessory);
   const parts = partsStage(sh, tiltFor(sd), acc);
+  const colors = parts.body.nMats > 1 ? trioColors(col) : [col];
+  // trio: eye_L / eye_R sit on the primary (second) blob, eye_*_2 / eye_*_3 on the first and third
+  const eyeColor = (name) => colors[parts.body.nMats > 1 ? { 2: 0, 3: 2 }[name.split('_')[2]] ?? 1 : 0];
+  const host = colors[parts.body.nMats > 1 ? (acc === 'glasses' ? 1 : 2) : 0];   // glasses on the primary, the rest on the top star
 
   const root = new THREE.Group();
   root.name = 'blob';
-  const body = new THREE.Mesh(parts.body.geo, parts.body.nMats > 1 ? trioColors(col).map(bodyMaterial) : bodyMaterial(col));
+  const body = new THREE.Mesh(parts.body.geo, parts.body.nMats > 1 ? colors.map(bodyMaterial) : bodyMaterial(col));
   body.name = 'body';
   root.add(body);
   for (const e of parts.eyes) {
-    const m = new THREE.Mesh(e.geo, eyeMaterial());
+    const m = new THREE.Mesh(e.geo, eyeMaterial(bodyTone(eyeColor(e.name)) === 'light'));
     m.name = e.name;
     m.position.set(e.pos[0], e.pos[1], e.pos[2]);
     root.add(m);
   }
   if (parts.extra) {
-    const dark = darkMaterial(acc === 'glasses' ? 'glasses' : 'stem');
+    const dark = darkMaterial(acc === 'glasses' ? 'glasses' : 'stem', bodyTone(host) === 'dark');
     const mats = parts.extra.accent ? [dark, accentMaterial(accentFor(col))] : dark;
     const extra = new THREE.Mesh(parts.extra.geo, mats);
     extra.name = 'extra';

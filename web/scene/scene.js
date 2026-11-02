@@ -20,6 +20,7 @@ const ASSETS = '../assets';
 const ISO_DIR = new THREE.Vector3(1, 1, 1).normalize();
 const HOME = { x: -0.4, y: -0.3, z: 0.3 };             // camera target relative to the active floor's surface
 const VIEW_SPAN = { w: 35, h: 22 };                 // meters visible at zoom 1 (the stack + the white air around it)
+const PHONE_SPAN_W = 29.5;                          // m across a phone's scene box: the floor + shaft fill ~90 % of the screen
 const ZOOM = { min: 0.75, max: 3, focus: 2 };
 const UI_LEFT = 230, UI_RIGHT = 360;                   // glass panels the building must not hide behind
 const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = ground foreshortening
@@ -63,11 +64,26 @@ const TEST = (() => {
 })();
 let frozen = false, pinCursor = false;
 
+// The office GLB is the biggest download: start it the moment this module runs (index.html may have preloaded it
+// already; the loader then reuses that response), not after the renderer and the UI are set up.
+const officeAssets = loadOfficeAssets(`${ASSETS}/office`);
+
 export function initScene(el, cbs = {}) {
   container = el;
   callbacks = cbs;
   container.classList.add('hq-scene');
   ensureAssets();
+
+  // Loader: index.html may already carry it (visible from the first paint). It stays until the first floor drops in,
+  // so nobody sees a half-built office (the elevator shaft alone) while the bots are still on their way.
+  loadingEl = container.querySelector('.hq-loading');
+  if (!loadingEl) {
+    loadingEl = document.createElement('div');
+    loadingEl.className = 'hq-loading';
+    loadingEl.setAttribute('role', 'status');
+    loadingEl.innerHTML = '<span class="hq-loading-label">Building the office</span><span class="hq-loading-track"><i></i></span>';
+    container.append(loadingEl);
+  }
 
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
   // the post chain (MSAA, half-float) is capped at 1.5x: soft by design, and it keeps VRAM and fill cost sane
@@ -96,18 +112,13 @@ export function initScene(el, cbs = {}) {
   camera.position.copy(ISO_DIR).multiplyScalar(80);
   camera.lookAt(0, 0, 0);
 
-  loadingEl = document.createElement('div');
-  loadingEl.className = 'hq-loading';
-  loadingEl.textContent = 'Building the office…';
-  container.append(loadingEl);
-
-  loadOfficeAssets(`${ASSETS}/office`).then((a) => {
+  officeAssets.then((a) => {
     assets = a;
     building = new Building({ scene, daylight, assets: a, baseUrl: `${ASSETS}/office`, renderer });
     a.spots.lounges.forEach((s) => { if (s) s.lounge = true; });
     window.bothq = Object.assign(window.bothq || {}, { source: a.source });
     resize();
-    const go = () => { if (lastState) sync(); loadingEl?.remove(); loadingEl = null; };
+    const go = () => { if (lastState) sync(); };
     Promise.race([fontsPromise, new Promise((r) => setTimeout(r, 1500))]).then(go, go);
   });
 
@@ -264,7 +275,15 @@ function switchFloor(id, first) {
     cam.y.to(y, 0.1); cam.zoom.to(0, 0.1);
   }
   switchedAt = nowSec;
-  if (first) building.prewarm(camera);
+  if (first) { building.prewarm(camera); hideLoader(); }
+}
+
+function hideLoader() {
+  const el = loadingEl;
+  if (!el) return;
+  loadingEl = null;
+  el.classList.add('is-done');
+  setTimeout(() => el.remove(), 450);
 }
 
 // ---------- camera (all on springs) ----------
@@ -310,7 +329,9 @@ function resize() {
   labels.setSize(w, h);
   post?.setSize(w, h);
   const aspect = w / h;
-  const halfH = Math.max(VIEW_SPAN.h, VIEW_SPAN.w / aspect) / 2 * (WALLPAPER ? WALLPAPER_FRAMING : 1);
+  // phones (the UI's <= 900 px layout) have no side panels to keep clear: the floor fills the width, bots read bigger
+  const spanW = WALLPAPER ? VIEW_SPAN.w : VIEW_SPAN.w + (PHONE_SPAN_W - VIEW_SPAN.w) * (1 - clamp((w - 560) / 340, 0, 1));
+  const halfH = Math.max(VIEW_SPAN.h, spanW / aspect) / 2 * (WALLPAPER ? WALLPAPER_FRAMING : 1);
   camera.left = -halfH * aspect; camera.right = halfH * aspect;
   camera.top = halfH; camera.bottom = -halfH;
   // keep the building clear of the glass panels: shift the view so its centre is the free space between them

@@ -8,7 +8,7 @@ export const SHAPES = [
 
 export const ACCESSORIES = ['none', 'glasses', 'stem', 'antenna', 'bow'];
 
-const HEX6 = /^#[0-9a-f]{6}$/i;
+const HEX6 = /^#?[0-9a-f]{6}$/i;                    // Grok Bot sometimes writes the colour without its '#'
 
 /** 'Rounded Cube' / 'rounded-cube' -> 'rounded_cube'; anything outside the enum -> null. */
 export function normShape(v) {
@@ -24,9 +24,9 @@ export function normAccessory(v) {
   return ACCESSORIES.includes(s) ? s : 'none';
 }
 
-/** '#rrggbb' -> '#RRGGBB'; anything else (3-digit hex, names, rgb()) -> null. */
+/** '#rrggbb' or 'rrggbb' -> '#RRGGBB'; anything else (3-digit hex, names, rgb()) -> null. */
 export function normColor(v) {
-  return typeof v === 'string' && HEX6.test(v.trim()) ? v.trim().toUpperCase() : null;
+  return typeof v === 'string' && HEX6.test(v.trim()) ? `#${v.trim().replace('#', '').toUpperCase()}` : null;
 }
 
 /** FNV-1a 32-bit. */

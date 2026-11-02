@@ -115,7 +115,9 @@ export class Building {
     this.renderer = renderer;
     this.group = new THREE.Group();
     this.group.name = 'building';
+    this.group.visible = false;         // nothing (not even the shaft) until the first floor drops in: scene.js shows a loader
     scene.add(this.group);
+    this.introDrop = false;             // load animation: shaft + cabin ride down with the active floor
 
     this.slots = [];                    // sorted by floor order
     this.byId = new Map();
@@ -271,12 +273,13 @@ export class Building {
     if (intro) {
       for (const s of this.slots) s.lift.snap(1);
       this.roofLift.snap(1);
-      this.cabinY.snap(0);
-      this.shaftTop.snap(0.5);
+      this.group.visible = true;
+      this.introDrop = true;
     }
     if (moved && !intro && !REDUCED) { this.pulseT = 0; this.swapped = false; }   // swap under the blur peak
     else this.applyShown();
     this.retarget(intro);
+    if (intro) { this.cabinY.snap(this.cabinY.target); this.shaftTop.snap(this.shaftTop.target); }   // a whole elevator, not a stub growing alone
     return true;
   }
 
@@ -364,9 +367,12 @@ export class Building {
 
     this.cabinY.step(dt);
     this.shaftTop.step(dt);
-    this.cabin.root.position.y = this.cabinY.x;
+    const act = this.slots[a];
+    if (this.introDrop && (!act || (act.lift.x < 1e-3 && act.lift.pending === null))) this.introDrop = false;
+    const drop = this.introDrop ? act.lift.x * LIFT : 0;
+    this.cabin.root.position.y = this.cabinY.x + drop;
     const bottom = -SLAB, top = Math.max(bottom + 0.1, this.shaftTop.x);
-    this.shaft.root.position.y = bottom;
+    this.shaft.root.position.y = bottom + drop;
     this.shaft.root.scale.y = (top - bottom) / this.shaftH;
 
     this.updateNightMaps(nowMs);

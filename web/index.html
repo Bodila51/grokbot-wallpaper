@@ -34,9 +34,12 @@
       }
     }
   </script>
+  <!-- the two big downloads start with the page, not after the scripts that ask for them (after the import map) -->
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js">
+  <link rel="preload" href="../assets/office/office.glb" as="fetch" crossorigin>
 </head>
 <body>
-  <main id="scene" aria-label="Office"></main>
+  <main id="scene" aria-label="Office"><div class="hq-loading" role="status"><span class="hq-loading-label">Building the office</span><span class="hq-loading-track"><i></i></span></div></main>
   <header id="topbar"></header>
   <nav id="floors" aria-label="Floors"></nav>
   <aside id="panel" aria-label="Bot card and floor team"></aside>

@@ -8,11 +8,26 @@
 .hq-scene canvas.hq-canvas { position: relative; z-index: 1; display: block; width: 100%; height: 100%; }
 .hq-labels { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
 
+/* Loader: a quiet label over a hairline, until the first floor drops in (the building then fades in under it).
+   The children fade in after a beat, so a fast (cached) load never flashes it. */
 .hq-loading {
   position: absolute; z-index: 4; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  font: 500 13px/1 Inter, system-ui, sans-serif; letter-spacing: .01em; color: #6E6E73;
-  transition: opacity .4s ease;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  font: 500 13px/1 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: .01em; color: #6E6E73;
+  pointer-events: none; transition: opacity .35s ease;
 }
+.hq-loading > * { animation: hq-loading-in .5s .2s ease-out both; }
+.hq-loading.is-done { opacity: 0; }
+.hq-loading-track {
+  position: relative; display: block; width: 112px; height: 2px; border-radius: 1px; overflow: hidden;
+  background: rgba(110, 110, 115, .16); background: color-mix(in srgb, currentColor 16%, transparent);
+}
+.hq-loading-track > i {
+  position: absolute; top: 0; bottom: 0; left: 0; width: 36%; border-radius: inherit; background: currentColor; opacity: .75;
+  animation: hq-loading-run 1.25s cubic-bezier(.45, 0, .25, 1) infinite;
+}
+@keyframes hq-loading-in { from { opacity: 0; } }
+@keyframes hq-loading-run { from { transform: translateX(-100%); } to { transform: translateX(280%); } }
 :root[data-daylight="night"] .hq-loading { color: #A1A1A6; }
 
 /* --- in-scene tags: dark pill = selected bot, compact white pill = needs the user / hovered --- */
@@ -54,4 +69,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hqt > * { animation: none; }
+  .hq-loading-track > i { animation: none; width: 100%; opacity: .3; }
 }
