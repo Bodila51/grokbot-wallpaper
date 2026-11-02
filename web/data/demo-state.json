@@ -107,8 +107,8 @@
    "group": "Coordination",
    "status": "working",
    "effective_status": "working",
-   "step": "R4: scanning X, 7 searches",
-   "task": "Weekly task plan",
+   "step": "(planning)",
+   "task": "(planning)",
    "since": "2026-10-31T16:39:00Z",
    "last_event": "2026-10-31T16:59:00Z",
    "usage_pct": 9.5,
@@ -151,27 +151,27 @@
     {
      "t": "2026-10-31T16:59:00Z",
      "status": "working",
-     "step": "R4: scanning X, 7 searches"
+     "step": "(planning)"
     },
     {
      "t": "2026-10-31T16:53:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(planning)"
     },
     {
      "t": "2026-10-31T16:47:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(planning)"
     },
     {
      "t": "2026-10-31T16:41:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(planning)"
     },
     {
      "t": "2026-10-31T16:35:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(planning)"
     }
    ]
   },
@@ -183,7 +183,7 @@
    "group": "Coordination",
    "status": "idle",
    "effective_status": "idle",
-   "step": "file ready, waiting for a new task",
+   "step": "(writing)",
    "task": null,
    "since": "2026-10-31T16:36:00Z",
    "last_event": "2026-10-31T16:56:00Z",
@@ -227,27 +227,27 @@
     {
      "t": "2026-10-31T16:56:00Z",
      "status": "idle",
-     "step": "file ready, waiting for a new task"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:50:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:44:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:38:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:32:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(writing)"
     }
    ]
   },
@@ -259,8 +259,8 @@
    "group": "X content",
    "status": "working",
    "effective_status": "working",
-   "step": "drafting a post about Topaz",
-   "task": "Weekly reach report",
+   "step": "(writing)",
+   "task": "(writing)",
    "since": "2026-10-31T16:33:00Z",
    "last_event": "2026-10-31T16:53:00Z",
    "usage_pct": 4.1,
@@ -303,27 +303,27 @@
     {
      "t": "2026-10-31T16:53:00Z",
      "status": "working",
-     "step": "drafting a post about Topaz"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:47:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:41:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:35:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:29:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(writing)"
     }
    ]
   },
@@ -335,8 +335,8 @@
    "group": "X content",
    "status": "working",
    "effective_status": "working",
-   "step": "drawing a 1500×500 banner, version 3",
-   "task": "Competitor post review",
+   "step": "(design)",
+   "task": "(design)",
    "since": "2026-10-31T16:30:00Z",
    "last_event": "2026-10-31T16:50:00Z",
    "usage_pct": 3,
@@ -379,27 +379,27 @@
     {
      "t": "2026-10-31T16:50:00Z",
      "status": "working",
-     "step": "drawing a 1500×500 banner, version 3"
+     "step": "(design)"
     },
     {
      "t": "2026-10-31T16:44:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(design)"
     },
     {
      "t": "2026-10-31T16:38:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(design)"
     },
     {
      "t": "2026-10-31T16:32:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(design)"
     },
     {
      "t": "2026-10-31T16:26:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(design)"
     }
    ]
   },
@@ -411,8 +411,8 @@
    "group": "X content",
    "status": "error",
    "effective_status": "error",
-   "step": "X rate limit 429, retrying in 15 min",
-   "task": "Quote picks for QT",
+   "step": "(analytics)",
+   "task": "(analytics)",
    "since": "2026-10-31T16:27:00Z",
    "last_event": "2026-10-31T16:47:00Z",
    "usage_pct": 2.4,
@@ -455,27 +455,27 @@
     {
      "t": "2026-10-31T16:47:00Z",
      "status": "error",
-     "step": "X rate limit 429, retrying in 15 min"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:41:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:35:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:29:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:23:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(analytics)"
     }
    ]
   },
@@ -487,8 +487,8 @@
    "group": "X content",
    "status": "done",
    "effective_status": "done",
-   "step": "report on 12 competitors is ready",
-   "task": "Thread on AI agents for Monday",
+   "step": "(research)",
+   "task": "(research)",
    "since": "2026-10-31T16:24:00Z",
    "last_event": "2026-10-31T16:44:00Z",
    "usage_pct": 2.1,
@@ -531,27 +531,27 @@
     {
      "t": "2026-10-31T16:44:00Z",
      "status": "done",
-     "step": "report on 12 competitors is ready"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:38:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:32:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:26:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:20:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(research)"
     }
    ]
   },
@@ -563,8 +563,8 @@
    "group": "X content",
    "status": "working",
    "effective_status": "stuck",
-   "step": "next run at 15:15 Kyiv time",
-   "task": "Covers for a post series",
+   "step": "(research)",
+   "task": "(research)",
    "since": "2026-10-31T15:53:00Z",
    "last_event": "2026-10-31T16:13:00Z",
    "usage_pct": 1.9,
@@ -607,27 +607,27 @@
     {
      "t": "2026-10-31T16:13:00Z",
      "status": "working",
-     "step": "next run at 15:15 Kyiv time"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:07:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:01:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T15:55:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T15:49:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(research)"
     }
    ]
   },
@@ -639,7 +639,7 @@
    "group": "X content",
    "status": "idle",
    "effective_status": "idle",
-   "step": "Friday brainstorm done: 20 ideas",
+   "step": "(brainstorming)",
    "task": null,
    "since": "2026-10-31T16:18:00Z",
    "last_event": "2026-10-31T16:38:00Z",
@@ -683,27 +683,27 @@
     {
      "t": "2026-10-31T16:38:00Z",
      "status": "idle",
-     "step": "Friday brainstorm done: 20 ideas"
+     "step": "(brainstorming)"
     },
     {
      "t": "2026-10-31T16:32:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(brainstorming)"
     },
     {
      "t": "2026-10-31T16:26:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(brainstorming)"
     },
     {
      "t": "2026-10-31T16:20:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(brainstorming)"
     },
     {
      "t": "2026-10-31T16:14:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(brainstorming)"
     }
    ]
   },
@@ -715,8 +715,8 @@
    "group": "X content",
    "status": "working",
    "effective_status": "working",
-   "step": "sorting 17 new bookmarks",
-   "task": "Competitor post review",
+   "step": "(sorting)",
+   "task": "(sorting)",
    "since": "2026-10-31T16:15:00Z",
    "last_event": "2026-10-31T16:35:00Z",
    "usage_pct": 1.6,
@@ -759,40 +759,40 @@
     {
      "t": "2026-10-31T16:35:00Z",
      "status": "working",
-     "step": "sorting 17 new bookmarks"
+     "step": "(sorting)"
     },
     {
      "t": "2026-10-31T16:29:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(sorting)"
     },
     {
      "t": "2026-10-31T16:23:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(sorting)"
     },
     {
      "t": "2026-10-31T16:17:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(sorting)"
     },
     {
      "t": "2026-10-31T16:11:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(sorting)"
     }
    ]
   },
   "codila-x-researcher": {
    "id": "codila-x-researcher",
-   "name": "Codila X Researcher",
+   "name": "X Researcher",
    "floor": "x-content",
    "desk": 8,
    "group": "X content",
    "status": "waiting_user",
    "effective_status": "waiting_user",
-   "step": "which thread do we pick?",
-   "task": "Quote picks for QT",
+   "step": "(research)",
+   "task": "(research)",
    "since": "2026-10-31T16:37:00Z",
    "last_event": "2026-10-31T16:57:00Z",
    "usage_pct": 2.8,
@@ -835,27 +835,27 @@
     {
      "t": "2026-10-31T16:57:00Z",
      "status": "waiting_user",
-     "step": "which thread do we pick?"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:51:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:45:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:39:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(research)"
     },
     {
      "t": "2026-10-31T16:33:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(research)"
     }
    ]
   },
@@ -867,8 +867,8 @@
    "group": "X content",
    "status": "working",
    "effective_status": "working",
-   "step": "measuring reach of 40 posts",
-   "task": "Thread on AI agents for Monday",
+   "step": "(analytics)",
+   "task": "(analytics)",
    "since": "2026-10-31T16:34:00Z",
    "last_event": "2026-10-31T16:54:00Z",
    "usage_pct": 2.2,
@@ -911,27 +911,27 @@
     {
      "t": "2026-10-31T16:54:00Z",
      "status": "working",
-     "step": "measuring reach of 40 posts"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:48:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:42:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:36:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(analytics)"
     },
     {
      "t": "2026-10-31T16:30:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(analytics)"
     }
    ]
   },
@@ -943,7 +943,7 @@
    "group": "Publishing",
    "status": "idle",
    "effective_status": "idle",
-   "step": "note on the GrokBot course published",
+   "step": "(writing)",
    "task": null,
    "since": "2026-10-31T16:31:00Z",
    "last_event": "2026-10-31T16:51:00Z",
@@ -987,27 +987,27 @@
     {
      "t": "2026-10-31T16:51:00Z",
      "status": "idle",
-     "step": "note on the GrokBot course published"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:45:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:39:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:33:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(writing)"
     },
     {
      "t": "2026-10-31T16:27:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(writing)"
     }
    ]
   },
@@ -1019,8 +1019,8 @@
    "group": "Publishing",
    "status": "waiting_user",
    "effective_status": "waiting_user",
-   "step": "approve the $40 budget?",
-   "task": "Friday Substack issue",
+   "step": "(ads)",
+   "task": "(ads)",
    "since": "2026-10-31T16:28:00Z",
    "last_event": "2026-10-31T16:48:00Z",
    "usage_pct": 0.9,
@@ -1063,27 +1063,27 @@
     {
      "t": "2026-10-31T16:48:00Z",
      "status": "waiting_user",
-     "step": "approve the $40 budget?"
+     "step": "(ads)"
     },
     {
      "t": "2026-10-31T16:42:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(ads)"
     },
     {
      "t": "2026-10-31T16:36:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(ads)"
     },
     {
      "t": "2026-10-31T16:30:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(ads)"
     },
     {
      "t": "2026-10-31T16:24:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(ads)"
     }
    ]
   },
@@ -1095,7 +1095,7 @@
    "group": "Finance",
    "status": "idle",
    "effective_status": "idle",
-   "step": "paused, not running anything",
+   "step": "(investing)",
    "task": null,
    "since": "2026-10-31T16:25:00Z",
    "last_event": "2026-10-31T16:45:00Z",
@@ -1139,27 +1139,27 @@
     {
      "t": "2026-10-31T16:45:00Z",
      "status": "idle",
-     "step": "paused, not running anything"
+     "step": "(investing)"
     },
     {
      "t": "2026-10-31T16:39:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(investing)"
     },
     {
      "t": "2026-10-31T16:33:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(investing)"
     },
     {
      "t": "2026-10-31T16:27:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(investing)"
     },
     {
      "t": "2026-10-31T16:21:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(investing)"
     }
    ]
   },
@@ -1171,8 +1171,8 @@
    "group": "Finance",
    "status": "working",
    "effective_status": "working",
-   "step": "reconciling October expenses",
-   "task": "Monthly portfolio review",
+   "step": "(finance)",
+   "task": "(finance)",
    "since": "2026-10-31T16:22:00Z",
    "last_event": "2026-10-31T16:42:00Z",
    "usage_pct": 1.5,
@@ -1215,27 +1215,27 @@
     {
      "t": "2026-10-31T16:42:00Z",
      "status": "working",
-     "step": "reconciling October expenses"
+     "step": "(finance)"
     },
     {
      "t": "2026-10-31T16:36:00Z",
      "status": "working",
-     "step": "started a task"
+     "step": "(finance)"
     },
     {
      "t": "2026-10-31T16:30:00Z",
      "status": "working",
-     "step": "collecting data"
+     "step": "(finance)"
     },
     {
      "t": "2026-10-31T16:24:00Z",
      "status": "working",
-     "step": "checking sources"
+     "step": "(finance)"
     },
     {
      "t": "2026-10-31T16:18:00Z",
      "status": "working",
-     "step": "writing the summary"
+     "step": "(finance)"
     }
    ]
   }
@@ -1246,525 +1246,525 @@
    "bot": "grok-bot",
    "name": "Grok Bot",
    "status": "working",
-   "step": "R4: scanning X, 7 searches"
+   "step": "(planning)"
   },
   {
    "t": "2026-10-31T16:57:00Z",
    "bot": "codila-x-researcher",
-   "name": "Codila X Researcher",
+   "name": "X Researcher",
    "status": "waiting_user",
-   "step": "which thread do we pick?"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:56:00Z",
    "bot": "jevopus",
    "name": "Jevopus",
    "status": "idle",
-   "step": "file ready, waiting for a new task"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:54:00Z",
    "bot": "trendy-x",
    "name": "Trendy X",
    "status": "working",
-   "step": "measuring reach of 40 posts"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:53:00Z",
    "bot": "x-writer",
    "name": "X Writer",
    "status": "working",
-   "step": "drafting a post about Topaz"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:53:00Z",
    "bot": "grok-bot",
    "name": "Grok Bot",
    "status": "working",
-   "step": "started a task"
+   "step": "(planning)"
   },
   {
    "t": "2026-10-31T16:51:00Z",
    "bot": "substack",
    "name": "Substack",
    "status": "idle",
-   "step": "note on the GrokBot course published"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:51:00Z",
    "bot": "codila-x-researcher",
-   "name": "Codila X Researcher",
+   "name": "X Researcher",
    "status": "working",
-   "step": "started a task"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:50:00Z",
    "bot": "banner-visuals",
    "name": "Banner & Visuals",
    "status": "working",
-   "step": "drawing a 1500×500 banner, version 3"
+   "step": "(design)"
   },
   {
    "t": "2026-10-31T16:50:00Z",
    "bot": "jevopus",
    "name": "Jevopus",
    "status": "working",
-   "step": "started a task"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:48:00Z",
    "bot": "x-ads-manager",
    "name": "X Ads Manager",
    "status": "waiting_user",
-   "step": "approve the $40 budget?"
+   "step": "(ads)"
   },
   {
    "t": "2026-10-31T16:48:00Z",
    "bot": "trendy-x",
    "name": "Trendy X",
    "status": "working",
-   "step": "started a task"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:47:00Z",
    "bot": "analytics-analyst",
    "name": "Analytics Analyst",
    "status": "error",
-   "step": "X rate limit 429, retrying in 15 min"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:47:00Z",
    "bot": "x-writer",
    "name": "X Writer",
    "status": "working",
-   "step": "started a task"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:47:00Z",
    "bot": "grok-bot",
    "name": "Grok Bot",
    "status": "working",
-   "step": "collecting data"
+   "step": "(planning)"
   },
   {
    "t": "2026-10-31T16:45:00Z",
    "bot": "warren-buffett",
    "name": "Warren Buffett",
    "status": "idle",
-   "step": "paused, not running anything"
+   "step": "(investing)"
   },
   {
    "t": "2026-10-31T16:45:00Z",
    "bot": "substack",
    "name": "Substack",
    "status": "working",
-   "step": "started a task"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:45:00Z",
    "bot": "codila-x-researcher",
-   "name": "Codila X Researcher",
+   "name": "X Researcher",
    "status": "working",
-   "step": "collecting data"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:44:00Z",
    "bot": "competitor-watch",
    "name": "Competitor Watch",
    "status": "done",
-   "step": "report on 12 competitors is ready"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:44:00Z",
    "bot": "banner-visuals",
    "name": "Banner & Visuals",
    "status": "working",
-   "step": "started a task"
+   "step": "(design)"
   },
   {
    "t": "2026-10-31T16:44:00Z",
    "bot": "jevopus",
    "name": "Jevopus",
    "status": "working",
-   "step": "collecting data"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:42:00Z",
    "bot": "finance-team",
    "name": "Finance Team",
    "status": "working",
-   "step": "reconciling October expenses"
+   "step": "(finance)"
   },
   {
    "t": "2026-10-31T16:42:00Z",
    "bot": "x-ads-manager",
    "name": "X Ads Manager",
    "status": "working",
-   "step": "started a task"
+   "step": "(ads)"
   },
   {
    "t": "2026-10-31T16:42:00Z",
    "bot": "trendy-x",
    "name": "Trendy X",
    "status": "working",
-   "step": "collecting data"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:41:00Z",
    "bot": "analytics-analyst",
    "name": "Analytics Analyst",
    "status": "working",
-   "step": "started a task"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:41:00Z",
    "bot": "x-writer",
    "name": "X Writer",
    "status": "working",
-   "step": "collecting data"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:41:00Z",
    "bot": "grok-bot",
    "name": "Grok Bot",
    "status": "working",
-   "step": "checking sources"
+   "step": "(planning)"
   },
   {
    "t": "2026-10-31T16:39:00Z",
    "bot": "warren-buffett",
    "name": "Warren Buffett",
    "status": "working",
-   "step": "started a task"
+   "step": "(investing)"
   },
   {
    "t": "2026-10-31T16:39:00Z",
    "bot": "substack",
    "name": "Substack",
    "status": "working",
-   "step": "collecting data"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:39:00Z",
    "bot": "codila-x-researcher",
-   "name": "Codila X Researcher",
+   "name": "X Researcher",
    "status": "working",
-   "step": "checking sources"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:38:00Z",
    "bot": "ideas-sparring",
    "name": "Ideas Sparring",
    "status": "idle",
-   "step": "Friday brainstorm done: 20 ideas"
+   "step": "(brainstorming)"
   },
   {
    "t": "2026-10-31T16:38:00Z",
    "bot": "competitor-watch",
    "name": "Competitor Watch",
    "status": "working",
-   "step": "started a task"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:38:00Z",
    "bot": "banner-visuals",
    "name": "Banner & Visuals",
    "status": "working",
-   "step": "collecting data"
+   "step": "(design)"
   },
   {
    "t": "2026-10-31T16:38:00Z",
    "bot": "jevopus",
    "name": "Jevopus",
    "status": "working",
-   "step": "checking sources"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:36:00Z",
    "bot": "finance-team",
    "name": "Finance Team",
    "status": "working",
-   "step": "started a task"
+   "step": "(finance)"
   },
   {
    "t": "2026-10-31T16:36:00Z",
    "bot": "x-ads-manager",
    "name": "X Ads Manager",
    "status": "working",
-   "step": "collecting data"
+   "step": "(ads)"
   },
   {
    "t": "2026-10-31T16:36:00Z",
    "bot": "trendy-x",
    "name": "Trendy X",
    "status": "working",
-   "step": "checking sources"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:35:00Z",
    "bot": "bookmarks-brain",
    "name": "Bookmarks Brain",
    "status": "working",
-   "step": "sorting 17 new bookmarks"
+   "step": "(sorting)"
   },
   {
    "t": "2026-10-31T16:35:00Z",
    "bot": "analytics-analyst",
    "name": "Analytics Analyst",
    "status": "working",
-   "step": "collecting data"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:35:00Z",
    "bot": "x-writer",
    "name": "X Writer",
    "status": "working",
-   "step": "checking sources"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:35:00Z",
    "bot": "grok-bot",
    "name": "Grok Bot",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(planning)"
   },
   {
    "t": "2026-10-31T16:33:00Z",
    "bot": "warren-buffett",
    "name": "Warren Buffett",
    "status": "working",
-   "step": "collecting data"
+   "step": "(investing)"
   },
   {
    "t": "2026-10-31T16:33:00Z",
    "bot": "substack",
    "name": "Substack",
    "status": "working",
-   "step": "checking sources"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:33:00Z",
    "bot": "codila-x-researcher",
-   "name": "Codila X Researcher",
+   "name": "X Researcher",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:32:00Z",
    "bot": "ideas-sparring",
    "name": "Ideas Sparring",
    "status": "working",
-   "step": "started a task"
+   "step": "(brainstorming)"
   },
   {
    "t": "2026-10-31T16:32:00Z",
    "bot": "competitor-watch",
    "name": "Competitor Watch",
    "status": "working",
-   "step": "collecting data"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:32:00Z",
    "bot": "banner-visuals",
    "name": "Banner & Visuals",
    "status": "working",
-   "step": "checking sources"
+   "step": "(design)"
   },
   {
    "t": "2026-10-31T16:32:00Z",
    "bot": "jevopus",
    "name": "Jevopus",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:30:00Z",
    "bot": "finance-team",
    "name": "Finance Team",
    "status": "working",
-   "step": "collecting data"
+   "step": "(finance)"
   },
   {
    "t": "2026-10-31T16:30:00Z",
    "bot": "x-ads-manager",
    "name": "X Ads Manager",
    "status": "working",
-   "step": "checking sources"
+   "step": "(ads)"
   },
   {
    "t": "2026-10-31T16:30:00Z",
    "bot": "trendy-x",
    "name": "Trendy X",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:29:00Z",
    "bot": "bookmarks-brain",
    "name": "Bookmarks Brain",
    "status": "working",
-   "step": "started a task"
+   "step": "(sorting)"
   },
   {
    "t": "2026-10-31T16:29:00Z",
    "bot": "analytics-analyst",
    "name": "Analytics Analyst",
    "status": "working",
-   "step": "checking sources"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:29:00Z",
    "bot": "x-writer",
    "name": "X Writer",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:27:00Z",
    "bot": "warren-buffett",
    "name": "Warren Buffett",
    "status": "working",
-   "step": "checking sources"
+   "step": "(investing)"
   },
   {
    "t": "2026-10-31T16:27:00Z",
    "bot": "substack",
    "name": "Substack",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(writing)"
   },
   {
    "t": "2026-10-31T16:26:00Z",
    "bot": "ideas-sparring",
    "name": "Ideas Sparring",
    "status": "working",
-   "step": "collecting data"
+   "step": "(brainstorming)"
   },
   {
    "t": "2026-10-31T16:26:00Z",
    "bot": "competitor-watch",
    "name": "Competitor Watch",
    "status": "working",
-   "step": "checking sources"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:26:00Z",
    "bot": "banner-visuals",
    "name": "Banner & Visuals",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(design)"
   },
   {
    "t": "2026-10-31T16:24:00Z",
    "bot": "finance-team",
    "name": "Finance Team",
    "status": "working",
-   "step": "checking sources"
+   "step": "(finance)"
   },
   {
    "t": "2026-10-31T16:24:00Z",
    "bot": "x-ads-manager",
    "name": "X Ads Manager",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(ads)"
   },
   {
    "t": "2026-10-31T16:23:00Z",
    "bot": "bookmarks-brain",
    "name": "Bookmarks Brain",
    "status": "working",
-   "step": "collecting data"
+   "step": "(sorting)"
   },
   {
    "t": "2026-10-31T16:23:00Z",
    "bot": "analytics-analyst",
    "name": "Analytics Analyst",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(analytics)"
   },
   {
    "t": "2026-10-31T16:21:00Z",
    "bot": "warren-buffett",
    "name": "Warren Buffett",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(investing)"
   },
   {
    "t": "2026-10-31T16:20:00Z",
    "bot": "ideas-sparring",
    "name": "Ideas Sparring",
    "status": "working",
-   "step": "checking sources"
+   "step": "(brainstorming)"
   },
   {
    "t": "2026-10-31T16:20:00Z",
    "bot": "competitor-watch",
    "name": "Competitor Watch",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:18:00Z",
    "bot": "finance-team",
    "name": "Finance Team",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(finance)"
   },
   {
    "t": "2026-10-31T16:17:00Z",
    "bot": "bookmarks-brain",
    "name": "Bookmarks Brain",
    "status": "working",
-   "step": "checking sources"
+   "step": "(sorting)"
   },
   {
    "t": "2026-10-31T16:14:00Z",
    "bot": "ideas-sparring",
    "name": "Ideas Sparring",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(brainstorming)"
   },
   {
    "t": "2026-10-31T16:13:00Z",
    "bot": "qt-scout",
    "name": "QT Scout",
    "status": "working",
-   "step": "next run at 15:15 Kyiv time"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:11:00Z",
    "bot": "bookmarks-brain",
    "name": "Bookmarks Brain",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(sorting)"
   },
   {
    "t": "2026-10-31T16:07:00Z",
    "bot": "qt-scout",
    "name": "QT Scout",
    "status": "working",
-   "step": "started a task"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T16:01:00Z",
    "bot": "qt-scout",
    "name": "QT Scout",
    "status": "working",
-   "step": "collecting data"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T15:55:00Z",
    "bot": "qt-scout",
    "name": "QT Scout",
    "status": "working",
-   "step": "checking sources"
+   "step": "(research)"
   },
   {
    "t": "2026-10-31T15:49:00Z",
    "bot": "qt-scout",
    "name": "QT Scout",
    "status": "working",
-   "step": "writing the summary"
+   "step": "(research)"
   }
  ]
 }

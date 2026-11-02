@@ -494,7 +494,7 @@ const MOODS = {
   dusk: { sky: ['#102152', '#303563', '#9C696B', '#F99958', '#D27B5F'], glow: '#FFB070', glowA: 0.55, rim: '#FFD9A0', rimA: 0.95, edgeA: 0.15, mul: '#ADA9C2', scr: '#000000', mist: 0, stars: 0, star1: 0.9 },
 };
 const FIXED_DAY = [[0, 'night'], [300, 'night'], [405, 'dawn'], [570, 'day'], [990, 'day'], [1125, 'dusk'], [1245, 'night'], [1440, 'night']];
-const heldTime = params.get('time');                     // ?time=18:45 shows that moment, for screenshots
+let heldTime = params.get('time');                       // ?time=18:45 shows that moment, for screenshots; grokBot.setTime
 const PLACES = {                                         // a city per common time zone, for the sun's times
   'Europe/Sofia': [42.7, 23.3], 'Europe/Kiev': [50.45, 30.5], 'Europe/Kyiv': [50.45, 30.5], 'Europe/Moscow': [55.75, 37.6],
   'Europe/Warsaw': [52.2, 21], 'Europe/Berlin': [52.5, 13.4], 'Europe/Paris': [48.85, 2.35], 'Europe/London': [51.5, -0.1],
@@ -544,6 +544,26 @@ function paintSky() {
 paintSky();
 setInterval(paintSky, 20000);
 
+// grokBot.setTime('07:15') holds the sky at that moment, null gives it back to the clock. The page that embeds the
+// wallpaper uses it to show morning, day, sunset or night at once, without a reload: the sky runs there in 0.6 s
+// through the hours between, the short way round the clock (with reduced motion it simply is there).
+let timeRun = 0;
+function setTime(hhmm) {
+  const toMin = (t) => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+  const d = new Date(), from = heldTime ? toMin(heldTime) : d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+  cancelAnimationFrame(timeRun);
+  if (!hhmm) { heldTime = null; paintSky(); return; }
+  const delta = ((((toMin(hhmm) - from + 720) % 1440) + 1440) % 1440) - 720, start = performance.now(), DUR = 600;
+  const at = (m) => { const t = ((m % 1440) + 1440) % 1440; return `${Math.floor(t / 60)}:${(t % 60).toFixed(2)}`; };
+  const step = (now) => {
+    const k = REDUCED ? 1 : Math.min(1, (now - start) / DUR), e = 1 - (1 - k) ** 3;
+    heldTime = k < 1 ? at(from + delta * e) : hhmm;
+    paintSky();
+    if (k < 1) timeRun = requestAnimationFrame(step);
+  };
+  timeRun = requestAnimationFrame(step);
+}
+
 (function scatterStars() {                               // sparse, tiny, in the upper sky only; a few twinkle
   let seed = 7;
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -584,7 +604,7 @@ function setBot(color) {
   try { localStorage.setItem('gbw.bot', botColor); } catch { /* private mode: not remembered */ }
 }
 setBot(params.get('bot') || (() => { try { return localStorage.getItem('gbw.bot'); } catch { return null; } })() || 'white');
-window.grokBot = { setBot };
+window.grokBot = { setBot, setTime };
 window.livelyPropertyListener = (name, value) => {
   if (name === 'botColor') setBot(Number(value) === 1 ? 'black' : 'white');
   if (name === 'feed') {                                 // the user's bots channel, typed into Lively's settings

@@ -646,12 +646,14 @@ function showWhen(name) {
   if (name === whenNow) return;
   whenNow = name;
   markWhen(name);
-  const time = `time=${hhmm(MOMENTS[name])}`;
+  const at = hhmm(MOMENTS[name]), time = `time=${at}`;
   for (const f of [live, board]) {
+    // the wallpaper turns its own sky (grokBot.setTime, 0.6 s, no reload); a frame that can't yet is reloaded
+    try { if (f.contentWindow?.grokBot?.setTime) { f.contentWindow.grokBot.setTime(at); if (f === live) [300, 700].forEach((ms) => setTimeout(tone, ms)); continue; } } catch {}
     const swap = () => { f.src = f === board ? `face/?demo=1&${time}` : `face/?${time}`; };   // the dashboard keeps its sample bots
     if (calm.matches || !f.animate) { swap(); continue; }
-    f.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
-      f.addEventListener('load', () => f.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.23, 1, .32, 1)', fill: 'forwards' }), { once: true });
+    f.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 120, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
+      f.addEventListener('load', () => f.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.23, 1, .32, 1)', fill: 'forwards' }), { once: true });
       swap();
     });
   }
