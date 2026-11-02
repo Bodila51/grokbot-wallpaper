@@ -1,8 +1,9 @@
 // Glue: polls /api/state (CONTRACT §4), keeps the view (floor, selection), feeds the scene and the UI.
-// With #<topic> in the link it reads the user's bots from their channel instead (feed.js, lib/feedbase.js): no server.
-// Without either (static preview) it runs on web/data/demo-state.json with a local simulation.
+// With #feed=<base>&key=<read key> it polls a private HTTP feed. With #<topic> (feed.js, lib/feedbase.js) it reads a
+// shared topic on the relay and/or ntfy. Without either (static preview) it runs on web/data/demo-state.json.
 import { initScene, renderScene, zoom, focusBot } from './scene/scene.js';
 import { initSound, sfx } from './audio/sound.js';
+import { bootTheme, mountThemePicker, onFloorThemesChanged, syncFloorThemeMenu, paintFloorAccents } from './theme/themes.js';
 
 const POLL_MS = 1000;
 const view = { currentFloor: null, selectedBot: null };
@@ -16,6 +17,9 @@ let demoTimer = null;
 const params = new URLSearchParams(location.search);
 const WALLPAPER = params.get('mode') === 'wallpaper';
 if (WALLPAPER) document.documentElement.classList.add('wallpaper');
+
+// Theme is ?theme= and localStorage (web/theme/). It stays in the query so the feed link can keep the fragment.
+await bootTheme();
 
 try {
   ui = await import(WALLPAPER ? './wallpaper.js' : './ui/ui.js');
@@ -36,7 +40,11 @@ ui.initUI({
 });
 
 // music and sound effects (not on the wallpaper): the speaker button sits in the top bar's right group
-if (!WALLPAPER) initSound({ slot: document.querySelector('#topbar .bhq-right') });
+if (!WALLPAPER) {
+  initSound({ slot: document.querySelector('#topbar .bhq-right') });
+  mountThemePicker(document.querySelector('#topbar .bhq-right'));
+  onFloorThemesChanged(() => render());
+}
 
 addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 
@@ -96,6 +104,10 @@ function render() {
   if (view.selectedBot && !state.bots[view.selectedBot]) view.selectedBot = null;
   renderScene(state, view);
   ui.renderUI(state, view);
+  if (!WALLPAPER) {
+    syncFloorThemeMenu(state.floors || []);
+    paintFloorAccents(state, view.currentFloor);
+  }
   if (!WALLPAPER) soundStatusChanges();
 }
 
@@ -132,13 +144,26 @@ async function poll() {
   setTimeout(poll, POLL_MS);
 }
 
-// ---------- the user's own bots: #<topic> ----------
+// ---------- the user's own bots: #<topic> or #feed=<base>&key=<read key> ----------
 
-const { feedFromLink } = await import('./lib/feedbase.js');
-if (feedFromLink(location)) {                              // #<topic>, #<topic>@<host>, ?feed=<host>#<topic>
-  const { feedFromHash, connectFeed } = await import('./feed.js');
-  connectFeed(feedFromHash(location.hash, location.search), (data) => { state = data; render(); });
-  addEventListener('hashchange', () => location.reload());   // another channel: start over
+function setFeedStatus(mode) {
+  let el = document.getElementById('bhq-feed-status');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'bhq-feed-status';
+    el.className = 'feed-status';
+    document.body.append(el);
+  }
+  if (!mode) { el.hidden = true; return; }
+  el.hidden = false;
+  el.textContent = mode === 'offline' ? 'feed offline' : 'not connected';
+}
+
+const { feedFromHash, connectFeed } = await import('./feed.js');
+const feedLink = feedFromHash(location.hash, location.search);
+if (feedLink) {
+  connectFeed(feedLink, (data) => { state = data; render(); }, setFeedStatus);
+  addEventListener('hashchange', () => location.reload());
 } else {
   poll();
 }

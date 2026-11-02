@@ -1,0 +1,58 @@
+/* Per-floor accent. Absent when the floor has the plain office interior, so the default chrome is unchanged. */
+
+.bhq-floor[data-interior] .bhq-fnum {
+  box-shadow: inset 0 -3px 0 var(--floor-accent, transparent);
+}
+.bhq-floor[data-interior][aria-current="true"] .bhq-fnum {
+  background: var(--floor-accent);
+  color: var(--floor-ink, #1d1d1f);
+}
+.bhq-thead[data-interior] {
+  border-top: 3px solid var(--floor-accent);
+}
+
+.bhq-theme-pop {
+  position: fixed;
+  z-index: 40;
+  width: min(280px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  overflow: auto;
+  padding: 12px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+  color-scheme: dark;
+}
+.bhq-theme-pop[hidden] { display: none !important; }
+.bhq-theme-pop label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font: 800 11px/1.2 inherit;
+  color: var(--mid, #B4B4BA);
+}
+.bhq-theme-pop select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .08);
+  color: inherit;
+  font: 800 13px/1 inherit;
+  cursor: pointer;
+}
+.bhq-theme-note {
+  margin: 0;
+  font: 700 11px/1.35 inherit;
+  color: var(--dim, #8E8E96);
+}
+.bhq-theme-floors { display: flex; flex-direction: column; gap: 8px; }
+.bhq-tfloor { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+.bhq-tfloor > span { font: 800 13px/1.2 inherit; color: var(--hi, #F2F2F7); }
+.bhq-tfloor .bhq-tfloor-now { grid-column: 1; font: 700 10px/1 inherit; color: var(--dim, #8E8E96); }
+.bhq-tfloor select { grid-column: 2; grid-row: 1 / span 2; width: 132px; }
+.bhq-theme-btn { cursor: pointer; }

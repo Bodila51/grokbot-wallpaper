@@ -1,5 +1,5 @@
 // State reducer: journal records -> CONTRACT §4 state. Pure in-memory, clock injectable for tests. Runs in Node (the
-// server) and in the browser (the office reading a bots channel on ntfy.sh), so: no Node-only APIs here.
+// server) and in the browser (private feed or a shared ntfy/relay topic), so: no Node-only APIs here.
 import { slugify, hashColor, cleanStr, makeTime, parseTime } from './util.js';
 
 export const LIMITS = {
@@ -25,13 +25,8 @@ const STATUS_MAP = {
   sleeping: 'idle', paused: 'idle', stopped: 'idle',
 };
 
-const BUILTIN_FLOORS = [
-  { id: 'coordination', name: 'Coordination', aliases: ['координация'] },
-  { id: 'x-content', name: 'X content', aliases: ['x-контент', 'x контент'] },
-  { id: 'publishing', name: 'Publishing', aliases: ['публикации'] },
-  { id: 'finance', name: 'Finance', aliases: ['финансы'] },
-];
-const GENERAL = { id: 'general', name: 'Main floor', aliases: ['общий этаж'] };   // English names; groups bots write in Russian still match
+// Bots with no group label share this floor. Labels from {"groups":…} are used as written.
+const UNASSIGNED = { id: 'unassigned', name: 'Unassigned' };
 
 // Fixed demo ids that a plain slug would not reproduce.
 const SLUG_ALIASES = { 'trendy-x-zakladki-i-mega-okhvat': 'trendy-x' };
@@ -420,12 +415,13 @@ export class StateStore {
 
   resolveFloor(raw) {
     const s = cleanStr(raw, 60);
-    if (!s) return GENERAL;
+    if (!s) return UNASSIGNED;
     const key = s.toLowerCase();
     for (const f of this.floorsCfg.floors) if (f.id.toLowerCase() === key || f.name.toLowerCase() === key) return f;
-    for (const f of BUILTIN_FLOORS) if (f.id === key || f.name.toLowerCase() === key || f.aliases.includes(key)) return f;
-    if (key === GENERAL.id || key === GENERAL.name.toLowerCase() || GENERAL.aliases.includes(key)) return GENERAL;
-    return { id: slugify(s) || 'general', name: s };
+    if (key === UNASSIGNED.id || key === UNASSIGNED.name.toLowerCase()) return UNASSIGNED;
+    const id = slugify(s);
+    if (!id || id === UNASSIGNED.id) return UNASSIGNED;
+    return { id, name: s };
   }
 
   baseFloorOf(bot) {
@@ -465,12 +461,9 @@ export class StateStore {
     let g;
     let idx;
     const ci = this.floorsCfg.floors.findIndex((x) => x.id === f.baseId);
-    if (f.baseId === GENERAL.id) { g = 3; idx = 0; }
+    if (f.baseId === UNASSIGNED.id) { g = 2; idx = 0; }
     else if (ci >= 0) { g = 0; idx = ci; }
-    else {
-      const bi = BUILTIN_FLOORS.findIndex((x) => x.id === f.baseId);
-      if (bi >= 0) { g = 1; idx = bi; } else { g = 2; idx = base.seq; }
-    }
+    else { g = 1; idx = base.seq; }
     return [g, idx, f.n];
   }
 

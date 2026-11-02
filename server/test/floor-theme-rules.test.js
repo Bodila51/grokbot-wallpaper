@@ -1,0 +1,32 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { FLOOR_THEME_RULES, guessFloorTheme } from '../../web/theme/floor-theme-rules.js';
+
+test('keyword table: first match, whole words for short tokens, unassigned skips', () => {
+  assert.ok(FLOOR_THEME_RULES.length >= 8);
+  assert.equal(guessFloorTheme('Ranch'), 'ranch');
+  assert.equal(guessFloorTheme('Home Workshop'), 'casita');
+  assert.equal(guessFloorTheme('Home IT'), 'casita');
+  assert.equal(guessFloorTheme('Personal'), 'ranch');
+  assert.equal(guessFloorTheme('Work'), 'office');
+  assert.equal(guessFloorTheme('Taste Media'), 'studio');
+  assert.equal(guessFloorTheme('Food Blog'), 'studio');
+  assert.equal(guessFloorTheme('Security'), 'vault');
+  assert.equal(guessFloorTheme('Team Studios'), 'arcade');
+  assert.equal(guessFloorTheme('Content Studio'), 'studio');
+  assert.equal(guessFloorTheme('Studios'), 'arcade');
+  assert.equal(guessFloorTheme('Design'), 'coffee');
+  assert.equal(guessFloorTheme('Dev Team'), 'arcade');
+  assert.equal(guessFloorTheme('Home Office'), 'casita');
+  assert.equal(guessFloorTheme('IT'), 'casita');
+  assert.equal(guessFloorTheme('PC repair'), 'casita');
+  assert.equal(guessFloorTheme('Unassigned'), null);
+  assert.equal(guessFloorTheme('unassigned'), null);
+  assert.equal(guessFloorTheme('Unassigned · 2'), null);
+  assert.equal(guessFloorTheme('Mystery Label'), null);
+  assert.equal(guessFloorTheme('community'), null);
+  assert.equal(guessFloorTheme('start'), null);
+  assert.equal(guessFloorTheme('party'), null);
+  assert.equal(guessFloorTheme('smart'), null);
+  assert.equal(guessFloorTheme(''), null);
+});

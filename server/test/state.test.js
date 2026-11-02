@@ -104,7 +104,7 @@ test('version only moves on real change', () => {
   assert.equal(store.version, pending);
 });
 
-test('floors: group -> floor, demo ids and order, free desks', () => {
+test('floors: group label is kept, unassigned is last, free desks', () => {
   const { store, ev } = make();
   ev('Finance Team', 'idle', null, { group: 'Финансы' });
   ev('X Writer', 'working', 'x', { group: 'X-контент' });
@@ -113,13 +113,13 @@ test('floors: group -> floor, demo ids and order, free desks', () => {
   ev('Loner', 'idle', null);
   ev('Newcomer', 'idle', null, { group: 'Новый отдел' });
   const st = store.snapshot();
-  assert.deepEqual(st.floors.map((f) => f.id), ['coordination', 'x-content', 'publishing', 'finance', 'novyy-otdel', 'general']);
+  assert.deepEqual(st.floors.map((f) => f.id), ['finansy', 'x-kontent', 'koordinatsiya', 'publikatsii', 'novyy-otdel', 'unassigned']);
   assert.deepEqual(st.floors.map((f) => f.order), [1, 2, 3, 4, 5, 6]);
-  assert.equal(st.floors[1].name, 'X content');
-  assert.equal(st.floors[1].free_desks, 19);
-  assert.equal(st.bots.loner.floor, 'general');
-  assert.equal(st.floors.at(-1).name, 'Main floor');
-  assert.equal(st.bots['finance-team'].floor, 'finance');
+  assert.equal(st.floors[0].name, 'Финансы');
+  assert.equal(st.floors[0].free_desks, 19);
+  assert.equal(st.bots.loner.floor, 'unassigned');
+  assert.equal(st.floors.at(-1).name, 'Unassigned');
+  assert.equal(st.bots['finance-team'].floor, 'finansy');
 });
 
 test('floor overflow: 21st bot goes to <id>-2, desks stable and 1..20', () => {
@@ -251,7 +251,8 @@ test('config overrides: bots.json (floor, chat_url, avatar, color) and floors.js
   store.setFloorsConfig({ floors: [{ id: 'ops', name: 'Операции' }], bots: { Jevopus: 'ops' } });
   store.commit();
   let st = store.snapshot();
-  assert.equal(st.bots['x-writer'].floor, 'finance');
+  assert.equal(st.bots['x-writer'].floor, 'finansy');
+  assert.equal(st.floors.find((f) => f.id === 'finansy').name, 'Финансы');
   assert.equal(st.bots['x-writer'].chat_url, 'grokbot://app/v1/agent?id=1');
   assert.equal(st.bots['x-writer'].avatar, 'custom');
   assert.equal(st.bots['x-writer'].color, '#ABCDEF');
@@ -263,7 +264,8 @@ test('config overrides: bots.json (floor, chat_url, avatar, color) and floors.js
   store.setFloorsConfig({ 'X Writer': 'ops' });
   st = store.snapshot();
   assert.equal(st.bots['x-writer'].floor, 'ops');
-  assert.equal(st.bots.jevopus.floor, 'coordination');
+  assert.equal(st.bots.jevopus.floor, 'koordinatsiya');
+  assert.equal(st.floors.find((f) => f.id === 'koordinatsiya').name, 'Координация');
   assert.equal(st.bots['x-writer'].color, '#2F6BFF', 'demo bots keep their avatar color');
 });
 

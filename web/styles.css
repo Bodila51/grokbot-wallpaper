@@ -141,6 +141,12 @@ body {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   font-size: 13px; color: var(--muted); letter-spacing: .02em;
 }
+.feed-status {
+  position: fixed; z-index: 25; left: 50%; bottom: 14px; transform: translateX(-50%);
+  padding: 4px 10px; border-radius: 999px; pointer-events: none;
+  font: 600 11px/1.3 var(--font, system-ui, sans-serif); letter-spacing: .01em;
+  color: #F5F5F7; background: rgba(28, 28, 30, .55);
+}
 
 /* Overlay containers never block the scene; only the panels inside them take pointer events. */
 #topbar {

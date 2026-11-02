@@ -9,6 +9,8 @@ import { Building } from './building.js';
 import { createDaylight } from './daylight.js';
 import { createPost } from './post.js';
 import { studioCss } from './studio.js';
+import { activeTheme } from '../theme/themes.js';
+import { dressBuilding } from '../theme/dress.js';
 import { Actor } from './actor.js';
 import { generateBlob } from './blobgen.js';
 import { Spring, clamp } from './spring.js';
@@ -28,7 +30,7 @@ const SIN_E = Math.sin(Math.atan(1 / Math.SQRT2));      // sin(35.264°) = groun
 // the camera), neighbours alternating so tags never collide.
 const DESK_ORDER = [1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20];
 
-let renderer, labels, camera, scene, container, callbacks, daylight, building, post;
+let renderer, labels, camera, scene, container, callbacks, daylight, building, post, scenery;
 let assets = null;
 let lastState = null, lastView = { currentFloor: null, selectedBot: null };
 const actors = new Map();
@@ -105,8 +107,14 @@ export function initScene(el, cbs = {}) {
   scene.environmentIntensity = 0.55;
 
   daylight = createDaylight({ scene, renderer });
+  const theme = activeTheme();
+  if (theme?.light) daylight.setLook(theme.light, { phase: theme.lightPhase });
   document.documentElement.dataset.sky = 'studio';        // white backdrop at every hour: the UI stays on light glass (web/styles.css)
   container.style.background = studioCss();               // the same backdrop as the post pass draws, for the first moments
+  if (loadingEl && theme?.loading) {
+    const label = loadingEl.querySelector('.hq-loading-label');
+    if (label) label.textContent = theme.loading;
+  }
 
   camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 240);
   camera.position.copy(ISO_DIR).multiplyScalar(80);
@@ -114,9 +122,18 @@ export function initScene(el, cbs = {}) {
 
   officeAssets.then((a) => {
     assets = a;
+    const themeNow = activeTheme();
+    try { themeNow?.restyle?.(a.templates); }
+    catch (err) { console.warn('[theme] restyle failed:', err); }
     building = new Building({ scene, daylight, assets: a, baseUrl: `${ASSETS}/office`, renderer });
     daylight.setBuilding(building);                        // sun stripes on the active floor, ambient tint of the baked surfaces
     a.spots.lounges.forEach((s) => { if (s) s.lounge = true; });
+    try {
+      if (themeNow?.mount) {
+        camera.layers.enable(1);                         // layer 0 stays the building; scenery opts into layer 1
+        scenery = themeNow.mount({ scene }) || null;
+      }
+    } catch (err) { console.warn('[theme] scenery failed:', err); }
     window.bothq = Object.assign(window.bothq || {}, { source: a.source });
     resize();
     const go = () => { if (lastState) sync(); };
@@ -189,6 +206,7 @@ function sync() {
     if ((bot.effective_status || bot.status) === 'working' && !lounge.has(bot.id)) flags[deskIdx] = 1;
     actor.update(bot, lounge.get(bot.id) || desk, { maxShare, selectedBot: view.selectedBot });
   }
+  dressBuilding(building, state, activeTheme()?.id || null);
   building.setScreens(flags);
   const floor = floors.find((f) => f.id === building.activeId);
   building.setDisplayData({ floorName: floor ? floor.name : '', bots: floorBots, hour: sofiaHour(state.now) });
@@ -608,6 +626,7 @@ function frame(t) {
   daylight.update(dt, nowMs);
   stepCamera(dt);
   if (building) building.update(dt, nowMs);
+  scenery?.update?.(dt);
   if (pointerDirty && !drag?.panning) { pointerDirty = false; setHover(pick()); }
   updateCursorGround();
 

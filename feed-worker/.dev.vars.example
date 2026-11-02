@@ -1,0 +1,3 @@
+# Copy to .dev.vars for local `wrangler dev`. Never commit real keys.
+WRITE_KEY=write-key-change-me
+READ_KEY=read-key-change-me

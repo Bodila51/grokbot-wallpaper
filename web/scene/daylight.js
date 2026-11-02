@@ -194,6 +194,8 @@ export function createDaylight({ scene, renderer }) {
   const state = { night: 0, lampsK: 0, windowsK: 0, phase: 'day', minutes: 720, el: 45, az: 0, params: null };
   let override = null;                            // minutes (?time= / setTime), or null = the live clock
   const real = params.get('real') === '1';        // ?time=..&real=1: today's real sun at that time
+  let themeLook = null;                          // a theme's fixed light; ignored while ?time= is set
+  let themePhase = null;
   let building = null;
   let cur = null;
   let target = null;
@@ -215,7 +217,25 @@ export function createDaylight({ scene, renderer }) {
     lastPlan = lastHtml = -1e9;
   }
 
+  // Fixed light for a theme (hex strings or the same arrays lightAt returns). ?time= still drives the clock.
+  function setLook(look, opts = {}) {
+    if (!look) { themeLook = null; themePhase = null; }
+    else {
+      const p = {};
+      for (const k of Object.keys(look)) p[k] = typeof look[k] === 'string' ? rgb(look[k]) : look[k];
+      themeLook = p;
+      themePhase = opts.phase || null;
+    }
+    cur = null;
+    lastPlan = lastHtml = -1e9;
+  }
+
   function plan() {
+    if (themeLook && override === null) {
+      target = themeLook;
+      state.phase = themePhase || 'day';
+      return;
+    }
     const d = new Date();
     if (override !== null && !real) [state.el, state.az] = refPosition(override);
     else {
@@ -345,7 +365,7 @@ export function createDaylight({ scene, renderer }) {
   }
 
   const api = {
-    uNight, state, update, setTime,
+    uNight, state, update, setTime, setLook,
     track(mat, kind) { tracked.set(mat, kind); },
     untrack(mat) { tracked.delete(mat); },
     setLampSource(fn) { lampSource = fn; },
