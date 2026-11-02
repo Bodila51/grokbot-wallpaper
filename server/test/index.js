@@ -3,3 +3,4 @@ import './state.test.js';
 import './journal.test.js';
 import './server.test.js';
 import './viewkey.test.js';
+import './feedbase.test.js';

@@ -2,14 +2,16 @@
  * Bot HQ UI: live cards on top of the full-bleed 3D scene (CONTRACT v2.3; look = the wallpaper's cards, web/face/face.css).
  *   top-left   brand + live clock         top-center  status counters        top-right  DEMO + usage meter
  *   left       floors "elevator"          right       floor team / bot card
- *   left, under the floors   dock: Waiting on me / Finished / Routines
+ *   left, under the floors   dock: Status check (while one runs) / Waiting on me / Finished / Routines
  *   bottom-left activity feed (last 4)    bottom-right (left of the card)  zoom - / +
  *
  *   initUI({ onSelectBot, onSelectFloor, onZoom, onOpenChat })
  *   renderUI(state, { currentFloor, selectedBot })   // idempotent, cheap, safe to call every second
  *
  * State fields read: bots, floors, feed, usage, demo, now, summary, plus (bots-only mode, may be missing):
- *   bots[id].chat_url, state.finished [{ t, bot, name, step }], state.routines [{ bot, name, routine, schedule, next_run }].
+ *   bots[id].chat_url, state.finished [{ t, bot, name, step }], state.routines [{ bot, name, routine, schedule, next_run }],
+ *   bots[id].last_seen (its own last status line), bots[id].unreported { from, to } (usage rose, no status line),
+ *   state.check { t, bots: [{ id, name, at }] } (a status check: who has answered).
  *
  * Every DOM node is created once and then patched in place (text / attributes / classes only when the
  * value changed), so hover, focus and scroll positions survive the 1 Hz re-render.
@@ -237,6 +239,26 @@ function relAgo(ms) {
   const hr = Math.floor(min / 60);
   if (hr < 24) return hr + ' h ago';
   return Math.floor(hr / 24) + ' d ago';
+}
+// "now", "12m", "3h", "2d": how long a bot has been silent, small enough for every row
+function relShort(ms) {
+  const min = Math.floor((nowMs() - ms) / 60000);
+  if (min < 1) return 'now';
+  if (min < 60) return min + 'm';
+  const hr = Math.floor(min / 60);
+  return hr < 24 ? hr + 'h' : Math.floor(hr / 24) + 'd';
+}
+// "Worked (unreported) · 09:00–13:00": usage rose between two usage lines and the bot posted no status in between
+function unreportedText(bot) {
+  const u = bot && bot.unreported;
+  if (!u) return '';
+  const a = parseTs(u.from), b = parseTs(u.to);
+  return 'Worked (unreported)' + (b == null ? '' : ' · ' + (a == null ? '' : hhmm(a) + '–') + hhmm(b));
+}
+// "seen 12 min ago" / "never reported", with the exact time in a title
+function seenText(bot) {
+  const t = parseTs(bot && bot.last_seen);
+  return t == null ? 'never reported' : 'seen ' + relAgo(t);
 }
 // "in 12 min", "in 3 h", "Tue 09:00" (local) when it is more than a day away
 function relIn(ms) {
@@ -694,7 +716,7 @@ function setDockOpen(card, on, save = true) {
 function fitDock(avail) {
   const d = U.dock;
   d.avail = avail;
-  const cards = [d.waiting, d.finished, d.routines];
+  const cards = [d.check, d.waiting, d.finished, d.routines];
   const live = cards.filter((c) => !c.root.hidden);
   const on = new Set(live.filter((c) => c.open));
   const need = () => live.reduce((n, c) => n + (on.has(c) ? (c.rows ? DOCK_OPEN_MIN : DOCK_OPEN_EMPTY) : DOCK_HEAD), 0) + DOCK_GAP * Math.max(0, live.length - 1);
@@ -718,6 +740,7 @@ function setWaitBlur(on, save = true) {
 
 function buildDock(floors, feed) {
   const root = own(h('aside', { class: 'bhq-dock', 'aria-label': 'Waiting on me, finished work and routines' }));
+  const check = dockCard('check', 'Status check');
   const waiting = dockCard('waiting', 'Waiting on me', { eye: true });
   const finished = dockCard('finished', 'Finished');
   const routines = dockCard('routines', 'Routines');
@@ -734,12 +757,17 @@ function buildDock(floors, feed) {
   const rempty = h('p', { class: 'bhq-note', text: 'No routines scheduled.', hidden: true });
   routines.inner.append(rl, rempty);
 
-  root.append(waiting.root, finished.root, routines.root);
+  const cl = h('ul', { class: 'bhq-ck', role: 'list' });
+  const cnote = h('p', { class: 'bhq-note bhq-cknote' });
+  check.inner.append(cl, cnote);
+  check.root.hidden = true;                                   // only while a check runs
+
+  root.append(check.root, waiting.root, finished.root, routines.root);
   document.body.append(root);
 
   U.dock = {
-    root, waiting, finished, routines, wlist, wempty, tl, fempty, rl, rempty,
-    lru: [], wrows: new Map(), finSig: null, finRefs: [], routSig: null, routRefs: [], copied: new Map(), blurred: false,
+    root, check, waiting, finished, routines, wlist, wempty, tl, fempty, rl, rempty, cl, cnote,
+    lru: [], wrows: new Map(), crows: new Map(), checkT: null, finSig: null, finRefs: [], routSig: null, routRefs: [], copied: new Map(), blurred: false,
     floors, feed,
   };
 
@@ -1282,10 +1310,11 @@ function makeCell(id) {
   const av = makeAva();
   const name = h('b', { class: 'bhq-mname' });
   const step = h('span', { class: 'bhq-mstep' });
+  const seen = h('span', { class: 'bhq-mseen bhq-num' });
   const btn = h('button', { class: 'bhq-member', type: 'button', 'data-id': id, role: 'listitem' },
-    av.root, h('span', { class: 'bhq-mtext' }, name, step));
+    av.root, h('span', { class: 'bhq-mtext' }, name, step), seen);
   btn.addEventListener('click', () => { if (U.h.onSelectBot) U.h.onSelectBot(id); });
-  return { btn, av, name, step };
+  return { btn, av, name, step, seen };
 }
 
 function renderTeam(state, floor, o) {
@@ -1334,10 +1363,16 @@ function renderTeam(state, floor, o) {
     const s = effStatus(bot);
     setAvatar(c.av, bot, s);
     setText(c.name, bot.name || id);
-    setText(c.step, bot.step || statusLabel(s));
+    const unrep = s === 'idle' ? unreportedText(bot) : '';
+    const quiet = s === 'idle' && bot.status === 'working';   // went silent mid-task: its last step is stale
+    setText(c.step, unrep || (quiet ? statusLabel(s) : bot.step || statusLabel(s)));
+    setAttr(c.step, 'data-u', unrep ? '' : null);
+    const seenAt = parseTs(bot.last_seen);
+    setText(c.seen, seenAt == null ? '–' : relShort(seenAt));
+    setAttr(c.seen, 'title', seenAt == null ? 'No status line yet' : 'Last status line ' + relAgo(seenAt) + ' (' + hhmm(seenAt) + ')');
     setAttr(c.btn, 'data-s', s);
-    setAttr(c.btn, 'aria-label', (bot.name || id) + ', ' + statusLabel(s));
-    setAttr(c.btn, 'title', (bot.name || id) + ': ' + statusLabel(s) + (bot.step ? '. ' + bot.step : ''));
+    setAttr(c.btn, 'aria-label', (bot.name || id) + ', ' + statusLabel(s) + ', ' + seenText(bot));
+    setAttr(c.btn, 'title', (bot.name || id) + ': ' + statusLabel(s) + (bot.step ? '. ' + bot.step : '') + ' · ' + seenText(bot));
     return c.btn;
   });
   reconcile(p.list, els, 0);
@@ -1364,14 +1399,15 @@ function renderCard(state, bot) {
   const fl = (state.floors || []).find((x) => x.id === bot.floor);
   const where = (fl && (fl.name || fl.id)) || bot.group || '';
   const desk = Number.isFinite(Number(bot.desk)) && bot.desk != null ? ' · desk ' + Number(bot.desk) : '';
-  setText(c.where, where + desk);
+  setText(c.where, where + desk + ' · ' + seenText(bot));
 
   setAttr(c.stDot, 'data-s', s);
   const since = parseTs(bot.since);
   const age = since == null ? '' : ' · ' + (now - since < 60000 ? 'just now' : fmtDur(now - since));
   setText(c.stTxt, (CHIP[s] || statusLabel(s)) + age);
 
-  setText(c.now, bot.step || 'No data on the current step');
+  const unrep = s === 'idle' ? unreportedText(bot) : '';
+  setText(c.now, unrep || (s === 'idle' && bot.status === 'working' ? 'Went quiet after: ' + (bot.step || 'a task') : bot.step || 'No data on the current step'));
 
   // Task: hide when empty, id-like ("tsk-1643") or a plain copy of the current step.
   const task = typeof bot.task === 'string' ? bot.task.trim() : '';
@@ -1485,6 +1521,7 @@ function renderFeed(state) {
 /* ---- dock */
 
 function renderDock(state) {
+  renderCheck(state);
   renderWaiting(state);
   renderFinished(state);
   renderRoutines(state);
@@ -1494,6 +1531,58 @@ function renderDock(state) {
 function botFor(state, id, fallbackName) {
   const b = state.bots && state.bots[id];
   return b || { id, name: fallbackName || id, avatar: id };
+}
+
+/* Status check: the setup bot posted {"check":{"bots":[…]}} and messaged every bot; a tick for each one whose own status
+   line arrived after that. Opens by itself when a new check starts; "no answer" after CHECK_WAIT_MS. */
+
+const CHECK_WAIT_MS = 15 * 60e3;
+
+function makeCheckRow(id) {
+  const av = makeAva({ orb: false });
+  const name = h('b', { class: 'bhq-ckname' });
+  const at = h('span', { class: 'bhq-ckat bhq-num' });
+  const li = h('li', { class: 'bhq-ckrow', 'data-id': id }, av.root, name, at);
+  li.addEventListener('click', () => { if (U.h.onSelectBot) U.h.onSelectBot(id); });
+  return { li, av, name, at };
+}
+
+function renderCheck(state) {
+  const d = U.dock;
+  const ck = state.check;
+  const list = ck && Array.isArray(ck.bots) ? ck.bots : [];
+  setHidden(d.check.root, !list.length);
+  if (!list.length) { d.checkT = null; return; }
+  if (d.checkT !== ck.t) { // a new check: open it on top of the others
+    d.checkT = ck.t;
+    setDockOpen(d.check, true, false);
+  }
+  const started = parseTs(ck.t) ?? nowMs();
+  const late = nowMs() - started > CHECK_WAIT_MS;
+  const ok = list.filter((b) => b.at).length;
+  setText(d.check.count, ok + '/' + list.length);
+  setAttr(d.check.count, 'data-s', ok === list.length ? 'done' : late ? 'error' : 'waiting_user');
+  d.check.rows = list.length;
+  setCls(d.check.root, 'has-rows', true);
+
+  const seen = new Set();
+  const els = list.map((b) => {
+    const id = b.id || b.name;
+    seen.add(id);
+    let r = d.crows.get(id);
+    if (!r) { r = makeCheckRow(id); d.crows.set(id, r); }
+    setAvatar(r.av, botFor(state, id, b.name), null);
+    setText(r.name, b.name || id);
+    const at = parseTs(b.at);
+    setAttr(r.li, 'data-ok', at != null ? 'yes' : late ? 'no' : 'wait');
+    setText(r.at, at != null ? '✓ ' + hhmm(at) : late ? 'no answer' : 'waiting…');
+    return r.li;
+  });
+  for (const [id, r] of d.crows) if (!seen.has(id)) { r.li.remove(); d.crows.delete(id); }
+  reconcile(d.cl, els, 0);
+  setText(d.cnote, ok === list.length ? 'Every bot answered.'
+    : late ? 'Ask the bots that did not answer to re-read their instructions, or run the setup again.'
+      : 'Started ' + hhmm(started) + '. Each bot ticks off when its own status line arrives.');
 }
 
 /* Waiting on me: every bot that is waiting for the user or in error, newest first. */

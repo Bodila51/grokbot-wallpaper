@@ -589,7 +589,7 @@ window.livelyPropertyListener = (name, value) => {
     const next = String(value ?? '').trim();
     if (next === (FEED || '')) return;
     try { if (next) localStorage.setItem('gbw.feed', next); else localStorage.removeItem('gbw.feed'); } catch { /* not remembered */ }
-    location.replace(location.pathname + (next ? `#${encodeURIComponent(next)}` : ''));   // in the hash: never sent to a server
+    location.replace(location.pathname + (next ? `#${encodeURIComponent(next).replace(/%40/g, '@')}` : ''));   // in the hash: never sent to a server
     if (next) location.reload();                         // a hash change alone doesn't reload the page
   }
 };
@@ -599,14 +599,20 @@ window.livelyPropertyListener = (name, value) => {
 // bots; the hash never reaches GitHub Pages, and &ntfy=<https server> picks a self-hosted ntfy. Every bot posts one
 // line per status change, {"bot":"…","status":"…","step":"…"}, plus roster, looks and usage lines (README), to the
 // channel with plain curl; nothing else runs on the bots' box. The page reads the last 12 hours, then listens live.
+// The mailbox is FEED_BASE unless the link names another: #<channel>@<host>, ?feed=<host> or &ntfy=<https server>.
+const FEED_BASE = 'https://ntfy.sh/';                    // = FEED_BASE in office/lib/feedbase.js (a test keeps them equal)
 const stored = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
-const HASH = /^#([A-Za-z0-9_-]{6,64})(?:&ntfy=([^&]+))?$/.exec(location.hash);
+const HASH = /^#([A-Za-z0-9_-]{6,64})(?:@([^&#]+)|&ntfy=([^&]+))?$/.exec(location.hash);
 function httpsServer(raw) {
-  try { const u = new URL(raw); return u.protocol === 'https:' || u.hostname === 'localhost' ? (u.origin + u.pathname).replace(/\/+$/, '') : null; } catch { return null; }
+  try {
+    const u = new URL(/^[a-z]+:\/\//i.test(raw) ? raw : `https://${raw}`);
+    return u.protocol === 'https:' || u.hostname === 'localhost' ? (u.origin + u.pathname).replace(/\/+$/, '') : null;
+  } catch { return null; }
 }
-const FEED = HASH?.[1] || params.get('feed') || stored('gbw.feed');
-const NTFY = httpsServer(HASH?.[2] ? decodeURIComponent(HASH[2]) : params.get('ntfy') || '') || stored('gbw.ntfy') || 'https://ntfy.sh';
-if (HASH || params.get('feed')) { try { localStorage.setItem('gbw.feed', FEED); localStorage.setItem('gbw.ntfy', NTFY); } catch { /* private mode: not remembered */ } }
+const QFEED = params.get('feed') || '', QBASE = /[./:]/.test(QFEED) ? QFEED : '';   // a bare ?feed=<channel> is an older link
+const FEED = HASH?.[1] || (QBASE ? '' : QFEED) || stored('gbw.feed');
+const NTFY = httpsServer(decodeURIComponent(HASH?.[2] || HASH?.[3] || '') || QBASE || params.get('ntfy') || '') || stored('gbw.ntfy') || FEED_BASE.replace(/\/$/, '');
+if ((HASH || QFEED) && FEED) { try { localStorage.setItem('gbw.feed', FEED); localStorage.setItem('gbw.ntfy', NTFY); } catch { /* private mode: not remembered */ } }
 const CYR = {
   а: 'a', б: 'b', в: 'v', г: 'g', д: 'd', е: 'e', ё: 'e', ж: 'zh', з: 'z', и: 'i', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o',
   п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'kh', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'shch', ъ: '', ы: 'y', ь: '', э: 'e',

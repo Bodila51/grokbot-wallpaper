@@ -323,3 +323,38 @@ Product rule from v2 made concrete: any user's bots get a blob without Blender.
 - **Review page:** `web/scene/blobgen.html` (served at `/scene/blobgen.html`): every shape x colour, accessories, the
   hash fallback, the 15 demo bots (hand-made GLB next to the generated one, looks in `web/data/demo-looks.json`),
   an office-scale strip and a self-test (triangle budget, GLB structure, determinism).
+
+## v2.7 Bots-only mode: one feed address, the status rule, silence made visible (2026-11-02)
+- **One address.** The bots post to and the office reads `FEED_BASE + topic`. `FEED_BASE` lives in
+  `web/lib/feedbase.js` (default `https://ntfy.sh/`); the setup prompt (`PROMPT.md`, step 1) builds the same address, and
+  the wallpaper (`web/face/face.js`) and the landing keep a copy. `server/test/feedbase.test.js` fails when they differ, so
+  a new base is changed in all of them at once (a non-default base also goes into the prompt's LINK as `#<topic>@<host>`).
+  Another mailbox is named by the link: `#<topic>@<host or https URL>`, `?feed=<host or https URL>`, or the older
+  `#<topic>&ntfy=<https URL>`. A bare `?feed=<topic>` is still an old wallpaper link (topic, default base). The office
+  reads that one mailbox only (no merging); a self-hosted relay is `#<topic>@relay.example.com`.
+- **Channel lines** (one JSON object per message, ≤ 4 KB): status `{"bot","status","step"}`, `{"roster":[…]}`,
+  `{"looks":{…}}`, `{"groups":{…}}`, `{"chat":{…}}`, `{"routines":{"bot","items":[…]}}`,
+  `{"type":"usage","total_used_pct","resets_at","bots":{…}}`, and new: `{"check":{"bots":["Bot A",…]}}` (the setup bot
+  starts a status check).
+- **The status rule lives in each bot's own instructions**, not only in shared memory (bots skip shared memory while
+  busy). The setup bot prepends it as line 1 of every description (UpdateAgent for teammates, UpdateProfile for itself),
+  with the real name and FEED written in:
+  `STATUS RULE, FIRST and LAST action of every turn in which you get a message (from me or from another bot): run curl -s -d '{"bot":"<exact name>","status":"working","step":"<task, max 80 chars>"}' <FEED_BASE><TOPIC> before anything else, and the same with done, idle, waiting_user or error right before your final reply. Never skip it, and never post the same line twice in a row. Valid JSON only, no secrets in step.`
+  A daily 08:00 routine of the setup bot re-adds the line to any bot whose description lacks it (new, renamed or edited
+  bots) and posts one test line per fixed bot. Setup ends with a status check: the `check` line, then SendToAgent
+  "status check" to each teammate; the setup reply names the bots that did not post. Bots set up with the earlier prompt
+  get the same through `UPGRADE.md` (one message; it keeps their FEED and link), shown folded on the landing; a test keeps
+  its STATUS RULE line identical to `PROMPT.md`'s.
+- **Rate:** no duplicate consecutive statuses (the rule says so). The free ntfy.sh takes about 250 messages a day; the
+  prompt and the landing say so.
+- **Office fallbacks** (`web/lib/state.js` with `quietIdleMs`, set by `web/feed.js` to 20 min):
+  - a `working` bot with no new line for 20 min is `idle` (`effective_status`), not `stuck`; its work time stops there.
+    The local server keeps the v1 rule (`stuck` after 30 min).
+  - `bots[id].last_seen` = ISO time of the bot's own last status line (`null` if it never posted; a roster line does not
+    count). The floor team list shows it on every row ("12m"), the bot card as "seen 12 min ago".
+  - `bots[id].unreported` = `{ from, to }` (ISO) when the bot's usage rose by ≥ 0.5 points between two usage lines and it
+    posted no status line in that window; `null` once it posts again or after 24 h. Shown instead of "resting":
+    "Worked (unreported) · 09:00–13:00".
+  - `state.check` = `{ t, bots: [{ id, name, at }] }` for the latest check line of the last 6 h (`at` = the bot's own status
+    line at or after `t`, else `null`). The dock shows a «Status check» card while it exists: a tick and time per bot,
+    "waiting…", then "no answer" after 15 min.

@@ -508,6 +508,22 @@
 .bhq-rrow.is-copied .bhq-rmeta { display: none; }
 .bhq-rrow.is-copied .bhq-rnote { display: flex; animation: bhq-note .4s var(--bhq-spring) both; }
 
+/* status check: every bot the setup bot asked, ticked off when its own status line arrives */
+.bhq-dcount[data-s="done"] { background: linear-gradient(90deg, rgba(52, 199, 89, .5), rgba(52, 199, 89, .32)); color: #E6FFEC; }
+.bhq-ck { display: flex; flex-direction: column; }
+.bhq-ckrow { display: flex; align-items: center; gap: 10px; padding: 6px 6px; border-radius: 12px; cursor: pointer; transition: background-color .25s; }
+.bhq-ckrow:hover { background: rgba(255, 255, 255, .06); }
+.bhq-ckrow .bhq-ava { width: 26px; height: 26px; }
+.bhq-ckname { flex: 1; min-width: 0; font: 900 13px/1.25 var(--bhq-round); color: var(--hi); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bhq-ckat { flex: none; font: 800 12px/1.25 var(--bhq-round); color: var(--mid); }
+.bhq-ckrow[data-ok="yes"] .bhq-ckat { color: #8CE5A4; }
+.bhq-ckrow[data-ok="no"] .bhq-ckat { color: #FFB8BF; }
+.bhq-cknote { padding-top: 4px; }
+
+/* the floor team: how long each bot has been silent; work the usage meter saw but no status line reported */
+.bhq-mseen { flex: none; align-self: center; margin-left: 4px; color: var(--dim); font: 800 11.5px/1 var(--bhq-round); }
+.bhq-mstep[data-u] { color: #B9CCFF; }
+
 /* ====================================================================== motion */
 
 @keyframes bhq-in { from { opacity: 0; transform: translateY(10px) scale(.96); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }

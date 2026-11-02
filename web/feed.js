@@ -1,10 +1,12 @@
 // Bots-only mode: the office reads the user's bots straight from their channel. No server, no tunnel.
-// The link is …/#<topic> (optionally &ntfy=<https server>). A plain link reads the same topic on two mailboxes and merges
-// them: our relay (RELAY, relay/ in this repo, where bots set up with the current prompt post) and ntfy.sh (where bots
-// set up with the first prompt still post). &ntfy=<server> reads that one server only. The topic lives in the hash, so
-// it never reaches any server but those. The same reducer the local server uses (lib/state.js) turns the lines into the
-// office's state. Both keep 12 hours, so the newest lines are cached per topic in localStorage and replayed first: after
-// a quiet night the office is not empty, every bot is still there, resting.
+// The link is …/#<topic>. A plain link reads the same topic on two mailboxes and merges them: our relay (RELAY, relay/ in
+// this repo, where bots set up with the current prompt post) and ntfy.sh (FEED_BASE in lib/feedbase.js, where bots set
+// up with the first prompt post). #<topic>@<host>, ?feed=<host> or the older #<topic>&ntfy=<server> name one mailbox
+// (a self-hosted ntfy) and read only that. The topic lives in the hash, so it never reaches any server but those. The
+// same reducer the local server uses (lib/state.js) turns the lines into the office's state. The mailboxes keep 12 hours,
+// so the newest lines are cached per topic in localStorage and replayed first: after a quiet night the office is not
+// empty, every bot is still there, resting. A `working` bot that stays silent for 20 minutes counts as idle (it forgot
+// its closing line).
 //
 // Lines on the channel (one JSON object per message, at most 4 KB, anything else is dropped):
 //   {"bot":"…","status":"working|idle|waiting_user|error|done","step":"…"}     a status change
@@ -14,54 +16,54 @@
 //   {"groups":{"Bot A":"Content"}}                                            teams, one floor each
 //   {"chat":{"Bot A":"grokbot://app/v1/agent?id=…"}}                         each bot's chat, for «Open chat»
 //   {"routines":{"bot":"Bot A","items":[{"name":"…","schedule":"…","next_run":"ISO"}]}}   a bot's routines
-// On top of the server's state the office gets state.finished (done lines of the last 24 h, newest first) and
-// state.routines (every bot's routines, soonest first), for the «Finished» and «Routines» panels.
+//   {"check":{"bots":["Bot A","Bot B"]}}                                     the setup bot starts a status check
+// On top of the server's state the office gets state.finished (done lines of the last 24 h, newest first),
+// state.routines (every bot's routines, soonest first) and state.check (the latest status check: who has answered), for
+// the «Finished», «Routines» and «Status check» panels.
 import { StateStore, botIdFor } from './lib/state.js';
+import { FEED_BASE, feedFromLink } from './lib/feedbase.js';
 
 const RELAY = 'https://relay.0xcodila.com', NTFY = 'https://ntfy.sh';
 const MAX_LINE = 4096, KEEP = 600, TICK_MS = 30e3, DAY_MS = 24 * 3600e3, PING_MS = 60e3;
+const QUIET_MS = 20 * 60e3, CHECK_MS = 6 * 3600e3;    // a silent worker turns idle; a status check stays up this long
 const HANDMADE = new Set(['grok-bot', 'jevopus', 'x-writer', 'banner-visuals', 'analytics-analyst', 'competitor-watch', 'qt-scout',
   'ideas-sparring', 'bookmarks-brain', 'codila-x-researcher', 'trendy-x', 'substack', 'x-ads-manager', 'warren-buffett', 'finance-team']);   // assets/blobs/<id>.glb
 
-/** `#<topic>` -> { topic, servers: [relay, ntfy.sh] }; `#<topic>&ntfy=<server>` -> that server only; else null. */
-export function feedFromHash(hash) {
-  const m = /^#([A-Za-z0-9_-]{6,64})(?:&ntfy=([^&]+))?$/.exec(hash || '');
-  if (!m) return null;
-  let servers = [RELAY, NTFY];
-  if (m[2]) {
-    try {
-      const u = new URL(decodeURIComponent(m[2]));
-      if (u.protocol === 'https:' || u.hostname === 'localhost') servers = [(u.origin + u.pathname).replace(/\/+$/, '')];
-    } catch { /* not a URL: both defaults */ }
-  }
-  return { topic: m[1], servers };
+/** The page's hash and query -> { topic, servers: [mailboxes, no trailing slash] }, or null without a topic.
+ *  A plain link reads both mailboxes; a link that names one reads that one. */
+export function feedFromHash(hash, search = '') {
+  const f = feedFromLink({ hash: hash || '', search });
+  if (!f) return null;
+  return { topic: f.topic, servers: f.base === FEED_BASE ? [RELAY, NTFY] : [f.base.replace(/\/$/, '')] };
 }
 
 /** Rebuild from cache + each mailbox's last 12 h, then follow them live. Calls onState(state) on every change. */
 export async function connectFeed({ topic, servers }, onState) {
-  const sources = servers.map((server) => ({ server, tag: server === RELAY ? 'relay' : 'ntfy', base: `${server}/${encodeURIComponent(topic)}`, lastId: null }));
-  const cacheKey = sources.length > 1 ? `bothq.feed.${topic}` : `bothq.feed.${servers[0]}.${topic}`;
-  const oldKey = `bothq.feed.${NTFY}.${topic}`;         // the cache from before the relay: all of it came from ntfy.sh
+  const sources = servers.map((server) => ({ server, tag: server.startsWith(RELAY) ? 'relay' : 'ntfy', base: `${server}/${encodeURIComponent(topic)}`, lastId: null }));
+  const usual = servers.length > 1;                      // the plain link: both mailboxes, one cache
+  const cacheKey = usual ? `bothq.feed.${topic}` : `bothq.feed.${servers[0]}.${topic}`;
+  const oldKey = `bothq.feed.${NTFY}.${topic}`;         // the cache of the first single-mailbox office (ntfy.sh only)
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Sofia';
-  const store = new StateStore({ tz, hasAvatar: (id) => HANDMADE.has(id) });   // others get a generated blob, no 404 probe
+  const store = new StateStore({ tz, quietIdleMs: QUIET_MS, hasAvatar: (id) => HANDMADE.has(id) });   // others get a generated blob, no 404 probe
   const cfg = {};                                        // per bot name: { look, chat_url } -> the store's bots config
   const routines = new Map();                            // bot id -> { name, items }
+  let check = null;                                      // the latest status check: { ms, names }
   let lines = [], saveTimer = 0;
   const seen = new Set();
 
   lines = cached(cacheKey).map((l) => ({ ...l, src: l.src || sources[0].tag }));
-  if (sources.length > 1) lines.push(...cached(oldKey).map((l) => ({ ...l, src: l.src || 'ntfy' })));
+  if (usual) lines.push(...cached(oldKey).map((l) => ({ ...l, src: l.src || 'ntfy' })));
   await Promise.all(sources.map(async (s) => {
     try {
       const text = await (await fetch(`${s.base}/json?poll=1&since=12h`, { cache: 'no-store' })).text();
       for (const row of text.split('\n')) if (row) keep(s, JSON.parse(row));
     } catch { /* offline or down: the other mailbox and the cache still show the office */ }
   }));
-  lines = lines.filter(fresh).sort((a, b) => a.time - b.time || (a.id < b.id ? -1 : 1));
+  lines = lines.filter(fresh).sort((a, b) => a.time - b.time);   // stable: lines of one second keep the mailbox's order
   for (const l of lines) ingest(l, true);
   for (const s of sources) s.lastId = lines.findLast((l) => l.src === s.tag)?.id ?? null;
   save();
-  if (sources.length > 1) try { localStorage.removeItem(oldKey); } catch { /* private mode */ }
+  if (usual) try { localStorage.removeItem(oldKey); } catch { /* private mode */ }
   publish();
   const bots = Object.values(cfg);
   beacon(topic, { bots: store.bots.size, floors: new Set(bots.map((c) => c.floor).filter(Boolean)).size, tags: new Set(lines.map((l) => l.src)),
@@ -130,7 +132,7 @@ export async function connectFeed({ topic, servers }, onState) {
     const t = typeof rec.t === 'string' ? rec.t : new Date(time * 1000).toISOString();
     if (Array.isArray(rec.roster)) {
       for (const name of rec.roster.slice(0, 400)) {
-        if (typeof name === 'string' && name.trim() && !store.bots.has(botIdFor(name))) store.apply({ t, bot: name, status: 'idle', step: '' }, { replay });
+        if (typeof name === 'string' && name.trim() && !store.bots.has(botIdFor(name))) store.apply({ t, bot: name, status: 'idle', step: '', listed: true }, { replay });
       }
       return true;
     }
@@ -163,6 +165,14 @@ export async function connectFeed({ topic, servers }, onState) {
       routines.set(botIdFor(name), { name, items });      // a bot's latest list replaces its previous one
       return true;
     }
+    if (isMap(rec.check)) {                              // the setup bot asks every bot for a status line: who answers?
+      const names = (Array.isArray(rec.check.bots) ? rec.check.bots : []).filter((n) => typeof n === 'string' && n.trim())
+        .slice(0, 400).map((n) => n.trim().slice(0, 80));
+      if (!names.length) return false;
+      const ms = Number.isFinite(Date.parse(t)) ? Date.parse(t) : time * 1000;
+      if (!check || ms >= check.ms) check = { ms, names };
+      return true;
+    }
     store.apply({ ...rec, t }, { replay });
     return true;
   }
@@ -180,6 +190,13 @@ export async function connectFeed({ topic, servers }, onState) {
     s.finished = finished;
     s.routines = [...routines].flatMap(([bot, { name, items }]) => items.map((r) => ({ bot, name, ...r })))
       .sort((a, b) => (a.next_run ? Date.parse(a.next_run) : Infinity) - (b.next_run ? Date.parse(b.next_run) : Infinity));
+    s.check = check && Date.now() - check.ms < CHECK_MS ? {
+      t: new Date(check.ms).toISOString(),
+      bots: check.names.map((name) => {                  // answered = a status line of its own at or after the check
+        const id = botIdFor(name), seen = Date.parse(s.bots[id]?.last_seen ?? '');
+        return { id, name, at: seen >= check.ms ? new Date(seen).toISOString() : null };
+      }),
+    } : null;
     return s;
   }
   function publish() { store.commit(); onState(extras(store.snapshot())); }

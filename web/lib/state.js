@@ -7,6 +7,8 @@ export const LIMITS = {
   HISTORY: 20,
   FEED: 100,
   STUCK_MS: 30 * 60e3,
+  USAGE_STEP: 0.5,             // usage points (per cent of the limit) that count as work between two usage lines
+  UNREPORTED_MS: 24 * 3600e3,  // how long "worked (unreported)" stays up when the bot stays silent
   DONE_MS: 60e3,
   IDLE_MS: 3 * 3600e3,
   MAX_BOTS: 400,
@@ -144,12 +146,15 @@ export class StateStore {
    * @param {boolean} [opts.demo] force the demo flag
    * @param {(avatarId: string) => boolean} [opts.hasAvatar] does assets/blobs/<id>.glb exist? Adds bots[id].has_glb so the
    *   browser can skip probing (and 404-ing) for hand-made models that are not there
+   * @param {number} [opts.quietIdleMs] a `working` bot silent this long counts as idle (the office reading a channel: bots
+   *   forget their closing line). Without it a silent worker turns `stuck` after LIMITS.STUCK_MS (the server).
    */
   constructor(opts = {}) {
     this.now = opts.now || Date.now;
     this.time = makeTime(opts.tz || 'Europe/Sofia');
     this.demoFlag = !!opts.demo;
     this.hasAvatar = typeof opts.hasAvatar === 'function' ? opts.hasAvatar : null;
+    this.quiet = opts.quietIdleMs > 0 ? { ms: opts.quietIdleMs, to: 'idle' } : { ms: LIMITS.STUCK_MS, to: 'stuck' };
     this.lastEventDemo = false;
     this.version = opts.version ?? Math.floor(this.now() / 1000); // unique per process start, so a restart never reuses a client's `since`
     this.dirty = false;
@@ -207,7 +212,7 @@ export class StateStore {
       if (this.bots.size >= LIMITS.MAX_BOTS) { this.meta.skipped++; return; }
       bot = {
         id, name, group: null, status: 'idle', step: null, task: null,
-        sinceMs: null, lastMs: null, assign: null, work: null,
+        sinceMs: null, lastMs: null, seenMs: null, unreported: null, assign: null, work: null,
         days: new Map(), history: [], eff: 'idle', sig: '',
       };
       this.bots.set(id, bot);
@@ -237,6 +242,7 @@ export class StateStore {
     const group = cleanStr(rec.group, 60);
     if (group) bot.group = group;
     bot.lastMs = bot.lastMs === null ? ms : Math.max(bot.lastMs, ms);
+    if (rec.listed !== true) bot.seenMs = Math.max(bot.seenMs ?? ms, ms);   // its own line, not a roster entry made for it
 
     bot.history.unshift({ ms, status, step });
     if (bot.history.length > LIMITS.HISTORY) bot.history.length = LIMITS.HISTORY;
@@ -274,6 +280,9 @@ export class StateStore {
     this.meta.usage_lines++;
     const u = this.usage;
     const now = this.now();
+    const prevMs = u.updatedMs, prev = u.bots;
+    let ms = parseTime(rec.t);
+    if (ms === null || ms > now + 60e3) ms = now;
     const period = cleanStr(rec.period, 20);
     if (period) u.period = period;
     const total = num(rec.total_used_pct);
@@ -287,6 +296,7 @@ export class StateStore {
         if (n !== null) m.set(botIdFor(k), n);
       }
       u.bots = m;
+      if (prevMs !== null && ms > prevMs) this.findUnreported(prev, m, prevMs, ms);
     }
     if (rec.routines && typeof rec.routines === 'object' && !Array.isArray(rec.routines)) {
       const r = {};
@@ -296,10 +306,19 @@ export class StateStore {
       }
       u.routines = r;
     }
-    let ms = parseTime(rec.t);
-    if (ms === null || ms > now + 60e3) ms = now;
     u.updatedMs = ms;
     this.dirty = true;
+  }
+
+  /** A bot whose usage rose between two usage lines without a status line of its own in between worked unreported. */
+  findUnreported(prev, next, fromMs, toMs) {
+    for (const [id, pct] of next) {
+      const bot = this.bots.get(id);
+      const was = prev.get(id) ?? (prev.size ? 0 : null);   // under 1% is left out of a usage line: it was ~0
+      if (!bot || was === null || pct < was + LIMITS.USAGE_STEP) continue;
+      if (bot.seenMs !== null && bot.seenMs >= fromMs) continue;
+      bot.unreported = { fromMs, toMs };
+    }
   }
 
   applySchedule(rec) {
@@ -322,11 +341,11 @@ export class StateStore {
   trackWork(bot, status, ms) {
     const w = bot.work;
     if (w) {
-      if (status === 'working' && ms - w.last <= LIMITS.STUCK_MS) {
+      if (status === 'working' && ms - w.last <= this.quiet.ms) {
         w.last = Math.max(w.last, ms);
         return;
       }
-      this.addWork(bot, w.start, Math.min(Math.max(ms, w.last), w.last + LIMITS.STUCK_MS));
+      this.addWork(bot, w.start, Math.min(Math.max(ms, w.last), w.last + this.quiet.ms));
       bot.work = null;
     }
     if (status === 'working') bot.work = { start: ms, last: ms };
@@ -360,7 +379,7 @@ export class StateStore {
     let ms = bot.days.get(day.key)?.work_ms ?? 0;
     if (bot.work) {
       const s = Math.max(bot.work.start, day.start);
-      const e = Math.min(now, bot.work.last + LIMITS.STUCK_MS);
+      const e = Math.min(now, bot.work.last + this.quiet.ms);
       if (e > s) ms += e - s;
     }
     return Math.round(ms / 60000);
@@ -374,7 +393,7 @@ export class StateStore {
     if (age > LIMITS.IDLE_MS) return 'idle';
     switch (bot.status) {
       case 'done': return age <= LIMITS.DONE_MS ? 'done' : 'idle';
-      case 'working': return age > LIMITS.STUCK_MS ? 'stuck' : 'working';
+      case 'working': return age > this.quiet.ms ? this.quiet.to : 'working';
       default: return bot.status;
     }
   }
@@ -457,6 +476,12 @@ export class StateStore {
 
   // ---------- output ----------
 
+  unreportedOf(bot, now) {
+    const u = bot.unreported;
+    if (!u || (bot.seenMs ?? 0) >= u.toMs || now - u.toMs > LIMITS.UNREPORTED_MS) return null;   // it has spoken since
+    return { from: this.time.iso(u.fromMs), to: this.time.iso(u.toMs) };
+  }
+
   /** Current full state (CONTRACT §4). Re-evaluates time-based statuses first. */
   snapshot() {
     this.tick();
@@ -518,6 +543,8 @@ export class StateStore {
         task: bot.task,
         since: iso(bot.sinceMs),
         last_event: iso(bot.lastMs),
+        last_seen: iso(bot.seenMs),
+        unreported: this.unreportedOf(bot, now),
         usage_pct: pct ?? null,
         usage_share: pct !== undefined && total ? Math.round(Math.min(1, Math.max(0, pct / total)) * 1000) / 1000 : null,
         chat_url: cfg.chat_url ?? null,
