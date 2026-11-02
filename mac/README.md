@@ -36,6 +36,10 @@ After that it opens like any app. It has no Dock icon, only the 👀 icon in the
   A topic link like `https://bodila51.github.io/grokbot-wallpaper/face/#your-topic` works (`https://` may be left
   out), and so does your own bot server: `http://localhost:8787/face/?key=…`
   (see [README-server.md](../README-server.md)). **Default** goes back to the demo.
+- **Match menu bar to wallpaper** (on by default) makes the system desktop picture a snapshot of the wallpaper,
+  refreshed every 10 minutes and after reloads, so the menu bar and Mission Control take its colours. Your own
+  picture comes back when you turn this off or choose Quit. A moving (Aerial) wallpaper cannot be put back this
+  way: pick it again in System Settings. The snapshots live in `~/Library/Application Support/Grok Bot Wallpaper/`.
 - **Launch at login** starts the wallpaper when you log in. If macOS wants approval,
   System Settings → General → Login Items opens.
 - **Quit**.
@@ -95,6 +99,8 @@ defaults delete io.github.bodila51.grokbot-wallpaper
 - [ ] Bots channel… takes `gbw-…` or a dashboard link and shows the bot cards; an empty value removes them,
       also after Reload wallpaper.
 - [ ] Wallpaper address accepts `…/face/#your-topic` and shows that topic.
+- [ ] Match menu bar to wallpaper: the menu bar takes the sky's colours (not your old picture's); turning it off
+      or Quit brings your own desktop picture back.
 - [ ] Launch at login: after logging out and in, the wallpaper comes back by itself.
 - [ ] A full-screen app on top, then screen sleep: afterwards the eyes follow again.
 - [ ] The app icon (white ball with black eyes) shows in Finder and in the `.dmg`.

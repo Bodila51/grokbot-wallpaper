@@ -21,6 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var loginItem: NSMenuItem!
     private var whiteBotItem: NSMenuItem!
     private var blackBotItem: NSMenuItem!
+    private var matchItem: NSMenuItem!
+    private var matcher: DesktopMatcher!
     private var dragMode = false
     private var dragSince = Date.distantPast
     private var escMonitor: Any?
@@ -29,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         feed = CursorFeed()
+        matcher = DesktopMatcher()
         installEditMenu()
         buildStatusItem()
         syncWallpapers()
@@ -40,10 +43,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         workspace.addObserver(self, selector: #selector(screensWoke), name: NSWorkspace.screensDidWakeNotification, object: nil)
         workspace.addObserver(self, selector: #selector(sessionLeft), name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
         workspace.addObserver(self, selector: #selector(sessionBack), name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+        workspace.addObserver(self, selector: #selector(spaceChanged), name: NSWorkspace.activeSpaceDidChangeNotification, object: nil)
+        let drift = Timer.scheduledTimer(timeInterval: 600, target: self, selector: #selector(skyDrifted), userInfo: nil, repeats: true)
+        drift.tolerance = 60
         perform(#selector(checkInstallPlace), with: nil, afterDelay: 1)
     }
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        matcher.restore(screenPairs())
+    }
 
     // Clicking any other app ends drag mode, so the icons never stay hidden behind the page.
     func applicationDidResignActive(_ notification: Notification) {
@@ -67,7 +77,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 wallpaper.setFrame(screen.frame)
             } else {
                 let wallpaper = Wallpaper(frame: screen.frame, url: Settings.url)
-                wallpaper.onLoad = { [weak self] in self?.feed.resend() }
+                wallpaper.onLoad = { [weak self] in
+                    self?.feed.resend()
+                    self?.matchDesktopSoon(3)                  // let the sky and the ball paint first
+                }
                 NotificationCenter.default.addObserver(self, selector: #selector(occlusionChanged),
                                                        name: NSWindow.didChangeOcclusionStateNotification, object: wallpaper.window)
                 wallpapers[id] = wallpaper
@@ -81,13 +94,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         for wallpaper in wallpapers.values { wallpaper.setInteractive(dragMode) }
         feed.targets = Array(wallpapers.values)
         updateFeed()
+        matchDesktopSoon(3)
+    }
+
+    // MARK: the system desktop picture follows the wallpaper (the menu bar is tinted from it)
+
+    private func matchDesktopSoon(_ delay: TimeInterval) {
+        guard Settings.matchDesktop else { return }
+        NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(matchDesktopNow), object: nil)
+        perform(#selector(matchDesktopNow), with: nil, afterDelay: delay)
+    }
+
+    @objc private func matchDesktopNow() {
+        guard Settings.matchDesktop, !screensAsleep, !sessionAway else { return }
+        for (screen, id) in screenPairs() {
+            if let wallpaper = wallpapers[id] { matcher.update(screen, id: id, from: wallpaper.webView) }
+        }
+    }
+
+    @objc private func skyDrifted() { matchDesktopSoon(0) }
+
+    @objc private func spaceChanged() {
+        if Settings.matchDesktop { matcher.reapply(screenPairs()) }
+    }
+
+    @objc private func toggleMatch() {
+        Settings.matchDesktop.toggle()
+        if Settings.matchDesktop { matchDesktopSoon(0) } else { matcher.restore(screenPairs()) }
+    }
+
+    private func screenPairs() -> [(NSScreen, CGDirectDisplayID)] {
+        NSScreen.screens.compactMap { screen in screen.displayID.map { (screen, $0) } }
     }
 
     // MARK: battery: the cursor feed runs only while a wallpaper can be seen
 
     @objc private func occlusionChanged() { updateFeed() }
     @objc private func screensSlept() { screensAsleep = true; updateFeed() }
-    @objc private func screensWoke() { screensAsleep = false; updateFeed() }
+    @objc private func screensWoke() { screensAsleep = false; updateFeed(); matchDesktopSoon(3) }
     @objc private func sessionLeft() { sessionAway = true; updateFeed() }
     @objc private func sessionBack() { sessionAway = false; updateFeed() }
 
@@ -118,6 +162,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(menuItem("Bots channel…", #selector(editChannel)))
         menu.addItem(menuItem("Wallpaper address…", #selector(editAddress)))
         menu.addItem(.separator())
+        matchItem = menuItem("Match menu bar to wallpaper", #selector(toggleMatch))
+        menu.addItem(matchItem)
         menu.addItem(loginItem)
         menu.addItem(.separator())
         menu.addItem(menuItem("Quit", #selector(quit), key: "q"))
@@ -136,6 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let bot = Settings.bot ?? "white"
         whiteBotItem.state = bot == "white" ? .on : .off
         blackBotItem.state = bot == "black" ? .on : .off
+        matchItem.state = Settings.matchDesktop ? .on : .off
         loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
     }
 
@@ -182,6 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let bot = sender.representedObject as? String else { return }
         Settings.bot = bot
         for wallpaper in wallpapers.values { wallpaper.applyBot() }
+        matchDesktopSoon(1.5)                                  // once the other ball has loaded
     }
 
     @objc private func reloadWallpapers() {
@@ -349,6 +397,22 @@ enum Settings {
               let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
               let range = Range(match.range, in: text) else { return nil }
         return String(text[range])
+    }
+
+    static var matchDesktop: Bool {
+        get { UserDefaults.standard.object(forKey: "matchDesktop") as? Bool ?? true }
+        set { UserDefaults.standard.set(newValue, forKey: "matchDesktop") }
+    }
+
+    /// The user's own desktop picture per display, kept while ours is shown (it survives a crash).
+    static func originalDesktop(for id: CGDirectDisplayID) -> URL? {
+        (UserDefaults.standard.dictionary(forKey: "originalDesktops")?[String(id)] as? String).flatMap { URL(string: $0) }
+    }
+
+    static func setOriginalDesktop(_ url: URL?, for id: CGDirectDisplayID) {
+        var all = UserDefaults.standard.dictionary(forKey: "originalDesktops") ?? [:]
+        if let url { all[String(id)] = url.absoluteString } else { all[String(id)] = nil }
+        UserDefaults.standard.set(all, forKey: "originalDesktops")
     }
 
     /// "white" or "black" once picked in the menu; nil leaves the page's own choice (?bot=…, its localStorage).
