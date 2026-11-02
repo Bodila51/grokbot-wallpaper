@@ -25,7 +25,7 @@ test('feed links: one default base, @host, ?feed=, the older &ntfy=', () => {
 
 // step 1 of a prompt prints FEED = <base> + topic, built from string pieces so it has no link
 const feedPrinted = (md) => [...md.matchAll(/print\(((?:'[^']*'\+)+)t\)/g)].map((m) => [...m[1].matchAll(/'([^']*)'/g)].map((x) => x[1]).join(''))[0];
-const statusRule = (md) => md.split('\n').find((l) => l.startsWith('STATUS RULE, '));
+const statusRule = (md) => md.split(/\r?\n/).find((l) => l.startsWith('STATUS RULE, '));   // a Windows checkout has CRLF
 
 test('prompts: the posted one feeds ntfy.sh (FEED_BASE), the current one our relay with the status rule', () => {
   assert.equal(feedPrinted(read('PROMPT.md')), FEED_BASE, 'PROMPT.md (the posted prompt) prints FEED_BASE + topic');
@@ -33,6 +33,7 @@ test('prompts: the posted one feeds ntfy.sh (FEED_BASE), the current one our rel
   assert.equal(feedPrinted(current), 'https://relay.0xcodila.com/', 'relay/PROMPT-relay.md prints the relay + topic');
   assert.ok(statusRule(current), 'relay/PROMPT-relay.md has the STATUS RULE line');
   assert.equal(statusRule(read('relay/RELIABLE.md')), statusRule(current), 'relay/RELIABLE.md writes the same rule');
+  assert.equal(statusRule(read('PROMPT.md')), statusRule(current), 'PROMPT.md writes the same rule into each bot');
   assert.equal(/const FEED_BASE = '([^']+)'/.exec(read('web/face/face.js'))?.[1], FEED_BASE, 'the wallpaper keeps a copy of FEED_BASE');
 });
 
