@@ -22,6 +22,7 @@ const parts = [
   ['web/lib', 'office/lib', /\.(js|css|json)$/, { deep: true, optional: true }],
   ['web/scene', 'office/scene', /\.(js|css)$/],
   ['web/ui', 'office/ui', /\.(js|css)$/],
+  ['web/audio', 'office/audio', /\.(js|m4a)$/],
   ['web/data', 'office/data', /^demo-(state|looks)\.json$/],
   // assets, shared by the wallpaper and the office (no preview renders, no office-v1.glb)
   ['assets/face', 'assets/face', /^(sphere(-black)?\.png|eye-.+\.png|eyes\.json|grain\.png)$/],

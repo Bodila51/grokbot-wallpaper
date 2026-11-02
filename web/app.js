@@ -2,6 +2,7 @@
 // With #<topic> in the link it reads the user's bots from their ntfy.sh channel instead (feed.js): no server at all.
 // Without either (static preview) it runs on web/data/demo-state.json with a local simulation.
 import { initScene, renderScene, zoom, focusBot } from './scene/scene.js';
+import { initSound, sfx } from './audio/sound.js';
 
 const POLL_MS = 1000;
 const view = { currentFloor: null, selectedBot: null };
@@ -24,20 +25,25 @@ try {
 
 initScene(document.getElementById('scene'), {
   onSelectBot: (id) => select(id),
-  onHoverBot: () => {},
+  onHoverBot: (id) => sfx.hover(id),
 });
 
 ui.initUI({
   onSelectBot: (id) => select(id),
   onSelectFloor: (id) => setFloor(id),
-  onZoom: (dir) => zoom(dir),
+  onZoom: (dir) => { zoom(dir); sfx.zoom(dir); },
   onOpenChat: (id, url) => { if (url) location.href = url; },
 });
+
+// music and sound effects (not on the wallpaper): the speaker button sits in the top bar's right group
+if (!WALLPAPER) initSound({ slot: document.querySelector('#topbar .bhq-right') });
 
 addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 
 function select(id) {
+  const before = view.selectedBot;
   view.selectedBot = id && state?.bots[id] ? id : null;
+  if (view.selectedBot !== before) sfx.select(!!view.selectedBot);
   if (view.selectedBot) {
     const bot = state.bots[view.selectedBot];
     if (bot.floor !== view.currentFloor) setFloor(bot.floor, true);
@@ -50,6 +56,10 @@ function select(id) {
 
 function setFloor(id, keepSelection = false) {
   if (!state?.floors.some((f) => f.id === id)) return;
+  if (id !== view.currentFloor) {                        // the elevator's chime rings higher on higher floors
+    const order = [...state.floors].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).findIndex((f) => f.id === id);
+    sfx.floor(order);
+  }
   view.currentFloor = id;
   if (!keepSelection) view.selectedBot = null;
   if (!WALLPAPER) { try { localStorage.setItem('bothq.floor', id); } catch {} }
@@ -86,6 +96,22 @@ function render() {
   if (view.selectedBot && !state.bots[view.selectedBot]) view.selectedBot = null;
   renderScene(state, view);
   ui.renderUI(state, view);
+  if (!WALLPAPER) soundStatusChanges();
+}
+
+// A bot that just started waiting for you, failed or finished gets a short sound (one per batch, the most urgent).
+// The first state is the baseline, so opening the page or replaying the channel's history stays quiet.
+let lastStatus = null;
+function soundStatusChanges() {
+  const now = {};
+  for (const [id, b] of Object.entries(state.bots)) now[id] = b.effective_status;
+  if (lastStatus) {
+    const fresh = new Set();
+    for (const [id, s] of Object.entries(now)) if (lastStatus[id] && lastStatus[id] !== s) fresh.add(s);
+    const kind = ['waiting_user', 'error', 'done'].find((k) => fresh.has(k));
+    if (kind) sfx.status(kind);
+  }
+  lastStatus = now;
 }
 
 // ---------- live polling ----------

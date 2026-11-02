@@ -194,6 +194,36 @@
   font: 900 10.5px/1 var(--bhq-round); letter-spacing: .12em; color: var(--mid);
 }
 
+/* the speaker button (audio/sound.js) and its small menu: Music / Sounds */
+.bhq-snd {
+  flex: none; width: 44px; height: 44px; border-radius: 22px; display: grid; place-items: center;
+  color: var(--hi); cursor: pointer; transition: color .2s, transform .3s var(--bhq-spring);
+}
+.bhq-snd:active { transform: scale(.9); }
+.bhq-snd .bhq-snd-off, .bhq-snd.is-off .bhq-snd-on { display: none; }
+.bhq-snd.is-off .bhq-snd-off { display: block; }
+.bhq-snd.is-off { color: var(--dim); }
+.bhq-snd-pop {
+  position: fixed; z-index: 40; width: 196px; padding: 6px; border-radius: 18px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.bhq-snd-pop[hidden] { display: none; }
+.bhq-snd-pop .bhq-snd-row {
+  appearance: none; border: 0; margin: 0; background: none; cursor: pointer; width: 100%; height: 40px;
+  padding: 0 8px 0 12px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between;
+  color: var(--hi); font: 800 13px/1 var(--bhq-round); transition: background-color .15s;
+}
+.bhq-snd-pop .bhq-snd-row:hover { background: rgba(255, 255, 255, .08); }
+.bhq-snd-pop .bhq-snd-row:focus-visible { outline: 2px solid #7DB7FF; outline-offset: 1px; }
+.bhq-snd-sw { position: relative; width: 34px; height: 20px; border-radius: 10px; background: rgba(255, 255, 255, .18); transition: background-color .2s; }
+.bhq-snd-sw::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .3); transition: translate .28s var(--bhq-spring);
+}
+.bhq-snd-row[aria-checked="true"] .bhq-snd-sw { background: #34C759; }
+.bhq-snd-row[aria-checked="true"] .bhq-snd-sw::after { translate: 14px 0; }
+.bhq-phone .bhq-snd { width: 42px; height: 42px; border-radius: 21px; }
+
 /* ====================================================================== floors (elevator) */
 
 #floors { padding: 12px 10px 10px; border-radius: 24px; display: flex; flex-direction: column; overflow: hidden; }
