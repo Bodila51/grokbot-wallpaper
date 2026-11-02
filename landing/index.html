@@ -255,6 +255,28 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
   .path { white-space: normal; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+/* ---------- the dashboard: the wallpaper with its live bot cards, the other half of the idea. The frame renders a
+   desktop-sized page (at least 620px wide) scaled to the panel, so it shows what a monitor shows ---------- */
+.board { padding: clamp(96px, 11vw, 160px) var(--edge) 0; }
+.board__frame { position: relative; margin-top: clamp(28px, 3.4vw, 48px); height: min(62.5vw, 86svh, 920px); border-radius: var(--radius); overflow: hidden; background: #E6E6E9; }   /* about 16:10, never taller than the screen */
+@media (max-width: 700px) { .board__frame { height: min(125vw, 80svh); } }   /* a phone: tall enough for the cards and the bot */
+.board__frame iframe { position: absolute; top: 0; left: 0; border: 0; display: block; transform-origin: 0 0; }
+.board__connect { margin-top: 22px; padding: 0 var(--tile-pad); display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; }
+.board__connect p { max-width: 62ch; font-size: 15px; line-height: 1.5; color: var(--soft); }
+.board__connect p b { color: var(--ink); font-weight: 600; }
+
+/* the time of day: four quiet pills under the colour pick. The stage opens on the visitor's own time (the sky follows
+   the real sun where they are); a pill shows that moment of the day instead, on the stage and on the dashboard */
+.when { position: relative; display: inline-grid; grid-template-columns: repeat(4, 1fr); margin-top: 10px; padding: 3px; border-radius: 999px; background: rgba(255, 255, 255, .92); box-shadow: 0 0 0 1px rgba(0, 0, 0, .06); pointer-events: auto; }
+.when button {
+  position: relative; z-index: 1; height: 34px; padding: 0 14px; border: 0; border-radius: 999px; background: none; color: var(--ink);
+  font: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: color 200ms ease; -webkit-tap-highlight-color: transparent;
+}
+.when button[aria-checked="true"] { color: #FFFFFF; }
+@media (pointer: coarse) { .when button { height: 44px; padding: 0 12px; } }
+.when__thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(25% - 1.5px); border-radius: 999px; background: var(--ink); transform: translateX(calc(var(--at, 0) * 100%)); transition: transform 260ms var(--ease-out); }
+.stage__title .when { display: grid; width: max-content; margin-inline: auto; }
+@media (max-width: 820px), (max-aspect-ratio: 4/5) { .stage__title .when { margin-inline: 0; } }
 </style>
 </head>
 <body>
@@ -266,7 +288,7 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
   </div>
   <div class="stage__bar">
     <span class="brand"><img class="mark" src="assets/brand/logo-mark.png" width="28" height="28" alt="">Grok Bot Wallpaper</span>
-    <nav class="stage__links" aria-label="On this page"><a href="#film">Watch</a><a href="#install">Install</a><a href="face/" data-fullscreen>Full screen</a></nav>
+    <nav class="stage__links" aria-label="On this page"><a href="#dashboard">Dashboard</a><a href="#film">Watch</a><a href="#install">Install</a><a href="face/" data-fullscreen>Full screen</a></nav>
   </div>
   <div class="stage__title">
     <h1>A wallpaper that looks back.</h1>
@@ -276,12 +298,30 @@ footer .links { display: flex; flex-wrap: wrap; gap: 6px 24px; }
       <button type="button" role="radio" aria-checked="false" data-pick="black"><i class="sw sw--black"></i>Black</button>
       <span class="pick__thumb" aria-hidden="true"></span>
     </div>
+    <div class="when" role="radiogroup" aria-label="Time of day">
+      <button type="button" role="radio" aria-checked="false" data-when="morning">Morning</button>
+      <button type="button" role="radio" aria-checked="false" data-when="day">Day</button>
+      <button type="button" role="radio" aria-checked="false" data-when="sunset">Sunset</button>
+      <button type="button" role="radio" aria-checked="false" data-when="night">Night</button>
+      <span class="when__thumb" aria-hidden="true"></span>
+    </div>
   </div>
   <div class="stage__actions">
     <a class="btn btn--big btn--ink" data-os="windows" href="download/grokbot-wallpaper-windows.zip" download>Download for Windows <small>for Lively Wallpaper (free)</small></a>
     <a class="btn btn--big btn--white" data-os="mac" href="https://github.com/Bodila51/grokbot-wallpaper/releases/latest/download/GrokBotWallpaper.dmg">Download for Mac <small>macOS 13 or later</small></a>
   </div>
 </header>
+
+  <section class="board" id="dashboard" aria-labelledby="board-title">
+    <div class="head rise"><h2 id="board-title">A dashboard for your bots, on your desktop.</h2><p>Live cards show which bots work, which wait for you and which hit an error. Drag them anywhere.</p></div>
+    <figure class="board__frame rise" style="--i:1">
+      <iframe id="board" src="face/?demo=1" title="Grok Bot Wallpaper with its live bot cards (sample bots)" loading="lazy"></iframe>
+    </figure>
+    <div class="board__connect rise" style="--i:2">
+      <button class="btn btn--ink" type="button" id="copy-prompt">Copy the setup prompt</button>
+      <p><b>Show your own bots.</b> Paste the prompt into Grok Bot. It connects all your bots and replies with your wallpaper link: paste that into Lively, or into the Mac app’s Bots channel.</p>
+    </div>
+  </section>
 
 <main>
   <section class="film" id="film" aria-labelledby="film-title">
@@ -438,10 +478,24 @@ setInterval(tone, 60e3);
 
 // The bot looks at the cursor anywhere on this page, not only over its frame: moves outside a frame are passed in
 // (same origin) in the frame's own coordinates, so the stage and the close-up turn their eyes to it.
+// The dashboard frame: a desktop-sized page, at least 620px wide, scaled to the panel (a phone sees a small monitor).
+const board = document.getElementById('board'), boardBox = board.parentElement;
+let boardScale = 1;
+function fitBoard() {
+  const w = boardBox.clientWidth, h = boardBox.clientHeight, vw = Math.max(w, 620);
+  if (!w || !h) return;
+  boardScale = w / vw;
+  board.style.width = `${vw}px`;
+  board.style.height = `${h / boardScale}px`;
+  board.style.transform = `scale(${boardScale})`;
+}
+fitBoard();
+new ResizeObserver(fitBoard).observe(boardBox);
+
 function pass() {
   queued = false;
   if (!cursor) return;
-  for (const [frame, s] of [[live, scale], ...closeups.map((c) => [c.el, c.s])]) {
+  for (const [frame, s] of [[live, scale], [board, boardScale], ...closeups.map((c) => [c.el, c.s])]) {
     const w = frame.contentWindow;
     if (!w || !w.PointerEvent) continue;
     const r = frame.getBoundingClientRect();
@@ -524,6 +578,85 @@ const io = 'IntersectionObserver' in window && new IntersectionObserver((list) =
   if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
 }), { rootMargin: '0px 0px -10% 0px' });
 document.querySelectorAll('.rise').forEach((el) => (io ? io.observe(el) : el.classList.add('is-in')));
+// ---------- the setup prompt: PROMPT.md's first fenced block, copied for Grok Bot ----------
+const copyPrompt = document.getElementById('copy-prompt');
+let promptText = null;
+fetch('PROMPT.md', { cache: 'no-cache' }).then((r) => (r.ok ? r.text() : Promise.reject(r.status))).then((md) => {
+  const fenced = md.match(/```[^\n]*\n([\s\S]*?)```/);
+  promptText = (fenced ? fenced[1] : md).trim();
+}).catch(() => { copyPrompt.textContent = 'Open the setup prompt'; });
+copyPrompt.addEventListener('click', async () => {
+  if (!promptText) { window.open('https://github.com/Bodila51/grokbot-wallpaper/blob/main/PROMPT.md', '_blank', 'noopener'); return; }
+  try { await navigator.clipboard.writeText(promptText); copyPrompt.textContent = 'Copied. Paste it into Grok Bot'; }
+  catch { copyPrompt.textContent = 'Copy did not work: open PROMPT.md on GitHub'; }
+  clearTimeout(copyPrompt.t); copyPrompt.t = setTimeout(() => { copyPrompt.textContent = 'Copy the setup prompt'; }, 2600);
+});
+
+// ---------- the time of day ----------
+// The wallpaper paints its sky from the real sunrise and sunset where the visitor is (face.js: sunTimes, dayPlan), so
+// the four moments are worked out the same way: morning = sunrise + 15 min, day = between sunrise and sunset, sunset =
+// sunset + 15 min, night = midnight. A pick reloads the stage and the dashboard at that moment (face/?time=HH:MM).
+const PLACES = {
+  'Europe/Sofia': [42.7, 23.3], 'Europe/Kiev': [50.45, 30.5], 'Europe/Kyiv': [50.45, 30.5], 'Europe/Moscow': [55.75, 37.6],
+  'Europe/Warsaw': [52.2, 21], 'Europe/Berlin': [52.5, 13.4], 'Europe/Paris': [48.85, 2.35], 'Europe/London': [51.5, -0.1],
+  'Europe/Madrid': [40.4, -3.7], 'Europe/Rome': [41.9, 12.5], 'Europe/Istanbul': [41, 29], 'Asia/Dubai': [25.2, 55.3],
+  'Asia/Kolkata': [28.6, 77.2], 'Asia/Singapore': [1.35, 103.8], 'Asia/Tokyo': [35.7, 139.7], 'Australia/Sydney': [-33.9, 151.2],
+  'America/New_York': [40.7, -74], 'America/Chicago': [41.9, -87.6], 'America/Denver': [39.7, -105], 'America/Los_Angeles': [34.05, -118.25],
+  'America/Sao_Paulo': [-23.55, -46.6],
+};
+function sunToday() {
+  const d = new Date(), zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [lat, lon] = PLACES[zone] || [45, -d.getTimezoneOffset() / 4];
+  const rad = Math.PI / 180, noon = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12);
+  const n = Math.round(noon / 864e5 + 2440587.5 - 2451545 + 0.0008), J = n - lon / 360;
+  const M = (357.5291 + 0.98560028 * J) % 360, C = 1.9148 * Math.sin(M * rad) + 0.02 * Math.sin(2 * M * rad) + 0.0003 * Math.sin(3 * M * rad);
+  const L = (M + C + 180 + 102.9372) % 360, transit = 2451545 + J + 0.0053 * Math.sin(M * rad) - 0.0069 * Math.sin(2 * L * rad);
+  const dec = Math.asin(Math.sin(L * rad) * Math.sin(23.4397 * rad));
+  const cosW = (Math.sin(-0.833 * rad) - Math.sin(lat * rad) * Math.sin(dec)) / (Math.cos(lat * rad) * Math.cos(dec));
+  if (Math.abs(cosW) > 1) return [6 * 60, 18 * 60];          // near the poles: a plain 6 to 18 day
+  const w = Math.acos(cosW) / rad / 360, local = (jd) => { const t = new Date((jd - 2440587.5) * 864e5); return t.getHours() * 60 + t.getMinutes(); };
+  return [local(transit - w), local(transit + w)];
+}
+const [rise, set] = sunToday();
+const MOMENTS = { morning: rise + 15, day: Math.round((rise + set) / 2), sunset: set + 15, night: 0 };
+const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+function momentNow() {
+  const d = new Date(), m = d.getHours() * 60 + d.getMinutes();
+  if (m < rise - 100 || m >= set + 110) return 'night';
+  if (m < Math.min(rise + 130, (rise + set) / 2)) return 'morning';
+  if (m < Math.max(set - 110, (rise + set) / 2)) return 'day';
+  return 'sunset';
+}
+const when = document.querySelector('.when'), WHEN = ['morning', 'day', 'sunset', 'night'];
+function markWhen(name) {
+  when.style.setProperty('--at', WHEN.indexOf(name));
+  when.querySelectorAll('[data-when]').forEach((b) => { const on = b.dataset.when === name; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+}
+let whenNow = momentNow();
+markWhen(whenNow);
+function showWhen(name) {
+  if (name === whenNow) return;
+  whenNow = name;
+  markWhen(name);
+  const time = `time=${hhmm(MOMENTS[name])}`;
+  for (const f of [live, board]) {
+    const swap = () => { f.src = f === board ? `face/?demo=1&${time}` : `face/?${time}`; };   // the dashboard keeps its sample bots
+    if (calm.matches || !f.animate) { swap(); continue; }
+    f.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 180, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
+      f.addEventListener('load', () => f.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.23, 1, .32, 1)', fill: 'forwards' }), { once: true });
+      swap();
+    });
+  }
+}
+when.addEventListener('click', (e) => { const b = e.target.closest('[data-when]'); if (b) showWhen(b.dataset.when); });
+when.addEventListener('keydown', (e) => {                   // a radio group: the arrows move the pick
+  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const next = WHEN[(WHEN.indexOf(whenNow) + step + 4) % 4];
+  showWhen(next);
+  when.querySelector(`[data-when="${next}"]`).focus();
+});
 </script>
 </body>
 </html>
