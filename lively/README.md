@@ -93,7 +93,7 @@ New key: delete `data\view-key.txt` and restart the server (`uninstall.cmd`, `in
 
 ## The public package (anyone, no server)
 
-`livelydistgrokbot-wallpaper-windows.zip` is what the site offers: the release `windows-v1.0` (a `windows-v*` tag publishes it, `.github/workflows/windows.yml`, so GitHub counts its downloads), and for older links at `download/grokbot-wallpaper-windows.zip`
+`lively\dist\grokbot-wallpaper-windows.zip` is what the site offers: the release `windows-v1.0` (a `windows-v*` tag publishes it, `.github/workflows/windows.yml`, so GitHub counts its downloads), and for older links at `download/grokbot-wallpaper-windows.zip`
 (`landing\assemble.mjs`; the zip is committed, it has no key). Drag it into Lively. Its `index.html` waits until
 GitHub Pages answers (at sign-in Lively often starts before the network), then opens
 `https://bodila51.github.io/grokbot-wallpaper/face/` with the Lively settings in the link (`?bot=black`, `#<channel>`);
